@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Runtime data: uploaded PDFs, SQLite database, FAISS indexes, model cache
+backend/data/
+data/
+
+# Node
+node_modules/
+dist/
+
+# Editors, OS and local tooling
+.DS_Store
+.idea/
+.vscode/
+.claude/

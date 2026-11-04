@@ -1,0 +1,21 @@
+[project]
+name = "researchmate-backend"
+version = "0.1.0"
+description = "ResearchMate API: research paper analysis with hybrid RAG"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    # Starlette now prefers the httpx2 fork for its TestClient; httpx still works
+    # and is the project's chosen HTTP test client.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

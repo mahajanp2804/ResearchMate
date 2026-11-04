@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+/* Class-based dark mode so the user's choice can override the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic design tokens. Components use these (bg-surface, text-fg-muted, …)
+   instead of raw palette colours, so both themes stay consistent. */
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-muted: #f2f4f7;
+  --border: #e4e7ec;
+  --border-strong: #d0d5dd;
+  --fg: #101828;
+  --fg-muted: #475467;
+  --fg-subtle: #8a94a6;
+
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef2ff;
+  --accent-text: #4338ca;
+  --accent-fg: #ffffff;
+
+  --success: #067647;
+  --success-soft: #ecfdf3;
+  --warning: #b54708;
+  --warning-soft: #fffaeb;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #0c0e13;
+  --surface: #13161d;
+  --surface-muted: #1a1e27;
+  --border: #252a35;
+  --border-strong: #343a47;
+  --fg: #e7e9ee;
+  --fg-muted: #a2aab8;
+  --fg-subtle: #6c7485;
+
+  --accent: #6366f1;
+  --accent-hover: #7c7ff5;
+  --accent-soft: rgb(99 102 241 / 0.14);
+  --accent-text: #a5b4fc;
+  --accent-fg: #ffffff;
+
+  --success: #47cd89;
+  --success-soft: rgb(71 205 137 / 0.12);
+  --warning: #fdb022;
+  --warning-soft: rgb(253 176 34 / 0.12);
+  --danger: #f97066;
+  --danger-soft: rgb(249 112 102 / 0.12);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-bg text-fg font-sans text-sm;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+}
