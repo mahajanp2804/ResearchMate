@@ -11,9 +11,19 @@ class ResearchMateError(Exception):
     status_code: int = 500
     code: str = "internal_error"
 
-    def __init__(self, message: str, *, details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
+        # A specific code (e.g. "encrypted_pdf") lets the UI react to the exact
+        # reason while the class still decides the HTTP status.
+        if code is not None:
+            self.code = code
         self.details = details or {}
 
 

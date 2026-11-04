@@ -8,6 +8,7 @@ from app.models.evaluation import (
     EvaluationRun,
     EvaluationRunStatus,
 )
+from app.models.page import DocumentPage
 
 __all__ = [
     "ActivityEvent",
@@ -15,6 +16,7 @@ __all__ = [
     "Chunk",
     "Conversation",
     "Document",
+    "DocumentPage",
     "EvaluationDataset",
     "EvaluationQuestion",
     "EvaluationRun",

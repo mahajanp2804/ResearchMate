@@ -1,4 +1,12 @@
-import type { ApiErrorBody, DashboardStats, HealthResponse, SystemInfo } from '../types/api'
+import type {
+  ApiErrorBody,
+  DashboardStats,
+  DocumentDetail,
+  DocumentListResponse,
+  HealthResponse,
+  SystemInfo,
+  UploadResponse,
+} from '../types/api'
 
 // Empty by default: in development Vite proxies /api to FastAPI, and in Docker
 // the web server does the same. Set VITE_API_BASE_URL only for a remote API.
@@ -42,6 +50,14 @@ const unreachableError = () =>
 // development, the web server in Docker) that could not reach FastAPI.
 const PROXY_FAILURE_STATUSES = new Set([502, 503, 504])
 
+function toApiError(status: number, body: unknown): ApiError {
+  if (isErrorBody(body)) {
+    return new ApiError(status, body.error.code, body.error.message, body.error.details)
+  }
+  if (PROXY_FAILURE_STATUSES.has(status)) return unreachableError()
+  return new ApiError(status, 'http_error', `Request failed with status ${status}`)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
@@ -54,15 +70,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw unreachableError()
   }
 
+  // 204 responses have no body; json() rejects and we return null.
   const body: unknown = await response.json().catch(() => null)
-  if (!response.ok) {
-    if (isErrorBody(body)) {
-      throw new ApiError(response.status, body.error.code, body.error.message, body.error.details)
-    }
-    if (PROXY_FAILURE_STATUSES.has(response.status)) throw unreachableError()
-    throw new ApiError(response.status, 'http_error', `Request failed with status ${response.status}`)
-  }
+  if (!response.ok) throw toApiError(response.status, body)
   return body as T
+}
+
+/**
+ * Upload one PDF. Uses XMLHttpRequest because fetch cannot report upload
+ * progress. `onProgress` receives the fraction of bytes sent (0–1).
+ */
+function uploadDocument(file: File, onProgress?: (fraction: number) => void): Promise<UploadResponse> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData()
+    form.append('files', file, file.name)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE_URL}/api/documents/upload`)
+    xhr.responseType = 'json'
+    xhr.setRequestHeader('Accept', 'application/json')
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.response as UploadResponse)
+      else reject(toApiError(xhr.status, xhr.response))
+    }
+    xhr.onerror = () => reject(unreachableError())
+    xhr.send(form)
+  })
 }
 
 export const api = {
@@ -70,4 +106,15 @@ export const api = {
   systemInfo: (signal?: AbortSignal) => request<SystemInfo>('/api/system/info', { signal }),
   dashboardStats: (signal?: AbortSignal) =>
     request<DashboardStats>('/api/dashboard/stats', { signal }),
+
+  listDocuments: (signal?: AbortSignal) =>
+    request<DocumentListResponse>('/api/documents?limit=500', { signal }),
+  getDocument: (documentId: string, signal?: AbortSignal) =>
+    request<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, { signal }),
+  deleteDocument: (documentId: string) =>
+    request<null>(`/api/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' }),
+  uploadDocument,
+  /** URL of the original PDF, optionally opened at a 1-based page. */
+  documentFileUrl: (documentId: string, page?: number) =>
+    `${API_BASE_URL}/api/documents/${encodeURIComponent(documentId)}/file${page ? `#page=${page}` : ''}`,
 }

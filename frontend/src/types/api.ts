@@ -27,6 +27,7 @@ export interface SystemInfo {
   embedding_model_name: string
   max_upload_size_mb: number
   max_files_per_upload: number
+  max_pages_per_document: number
   chunking: {
     chunk_size_tokens: number
     chunk_overlap_tokens: number
@@ -76,6 +77,67 @@ export interface DashboardStats {
   total_conversations: number
   recent_documents: RecentDocument[]
   recent_activity: ActivityItem[]
+}
+
+/** Metadata read from the PDF; every key is optional. */
+export interface ExtractedMetadata {
+  author?: string
+  subject?: string
+  keywords?: string
+  creator?: string
+  producer?: string
+  pdf_version?: string
+  pdf_title?: string
+  created?: string
+  modified?: string
+  title_source?: 'metadata' | 'first_page' | 'filename'
+}
+
+export interface DocumentSummary {
+  id: string
+  filename: string
+  title: string | null
+  page_count: number | null
+  file_size_bytes: number
+  processing_status: ProcessingStatus
+  indexing_status: IndexingStatus
+  status_message: string | null
+  chunk_count: number
+  extracted_metadata: ExtractedMetadata
+  upload_date: string
+  updated_at: string
+}
+
+export interface DocumentDetail extends DocumentSummary {
+  file_hash: string
+  embedding_model: string | null
+  indexed_at: string | null
+  pages_without_text: number[]
+}
+
+export interface DocumentListResponse {
+  items: DocumentSummary[]
+  total: number
+}
+
+export interface ErrorDetail {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface UploadResult {
+  filename: string
+  status: 'created' | 'duplicate' | 'rejected'
+  document: DocumentSummary | null
+  error: ErrorDetail | null
+}
+
+export interface UploadResponse {
+  results: UploadResult[]
+  created: number
+  duplicates: number
+  rejected: number
 }
 
 export interface ApiErrorBody {

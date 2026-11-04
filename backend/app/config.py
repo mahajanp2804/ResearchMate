@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     # --- Uploads -----------------------------------------------------------
     max_upload_size_mb: int = Field(default=50, gt=0)
     max_files_per_upload: int = Field(default=10, gt=0)
+    # Guards against pathological or decompression-bomb style PDFs.
+    max_pages_per_document: int = Field(default=500, gt=0)
 
     # --- Chunking ----------------------------------------------------------
     chunk_size_tokens: int = Field(default=800, gt=0)

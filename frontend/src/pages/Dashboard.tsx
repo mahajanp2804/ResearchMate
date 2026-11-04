@@ -20,7 +20,7 @@ import { ErrorState, Skeleton } from '../components/ui/Feedback'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
 import type { ActivityItem, RecentDocument } from '../types/api'
-import { formatNumber, formatRelativeTime } from '../utils/format'
+import { formatNumber, formatRelativeTime, pluralize } from '../utils/format'
 
 const QUICK_ACTIONS: { to: string; title: string; description: string; icon: LucideIcon }[] = [
   {
@@ -87,7 +87,7 @@ function RecentDocuments({ documents }: { documents: RecentDocument[] }) {
               {document.title ?? document.filename}
             </p>
             <p className="truncate text-xs text-fg-subtle">
-              {document.page_count !== null && `${document.page_count} pages · `}
+              {document.page_count !== null && `${pluralize(document.page_count, 'page')} · `}
               {formatRelativeTime(document.created_at)}
             </p>
           </div>

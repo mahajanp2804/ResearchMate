@@ -84,13 +84,14 @@ ResearchMate/
 │   │   ├── database.py           # engine, session factory, Base, get_db
 │   │   ├── exceptions.py         # domain errors mapped to HTTP responses
 │   │   ├── models/               # SQLAlchemy ORM
-│   │   │   ├── document.py  chunk.py  conversation.py  evaluation.py  activity.py
+│   │   │   ├── document.py  page.py  chunk.py  conversation.py  evaluation.py  activity.py
 │   │   ├── schemas/              # Pydantic API contracts
 │   │   │   ├── common.py  system.py  document.py  chat.py  research.py  evaluation.py
 │   │   ├── routers/
 │   │   │   ├── system.py  documents.py  chat.py  research.py  comparison.py  evaluation.py
 │   │   ├── services/
-│   │   │   ├── ingestion_service.py   # orchestrates the pipeline below
+│   │   │   ├── document_service.py    # upload, de-duplication, listing, deletion
+│   │   │   ├── ingestion_service.py   # chunk → embed → index for stored documents
 │   │   │   ├── pdf_service.py  text_cleaning.py  chunking_service.py
 │   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py
 │   │   │   ├── hybrid_retriever.py  reranker.py  rag_pipeline.py
@@ -125,7 +126,9 @@ ResearchMate/
 Changes from the suggested layout, and why:
 
 - `models/evaluation.py`, `models/activity.py` — evaluation datasets/runs and the dashboard's activity feed need their own tables.
-- `services/ingestion_service.py` — one place that runs extraction → chunking → embedding → indexing and updates status, so routers stay thin.
+- `models/page.py` — raw text per page is stored once, so chunking settings can change and papers can be re-chunked without re-parsing PDFs.
+- `services/document_service.py` — upload validation, duplicate detection, extraction and deletion, keeping the documents router thin.
+- `services/ingestion_service.py` — one place that runs chunking → embedding → indexing for stored documents and updates their status.
 - `routers/system.py` — health check, non-secret configuration and dashboard stats.
 - `exceptions.py` — a small domain-error hierarchy so services raise meaningful errors and `main.py` maps them to HTTP codes in one place.
 

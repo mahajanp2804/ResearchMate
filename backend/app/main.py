@@ -19,10 +19,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
-from app.routers import system
+from app.routers import documents, system
 from app.utils.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
+
+# Allowance for multipart boundaries and headers on top of the file bytes.
+MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 
 
 def _error_response(status_code: int, code: str, message: str, details=None) -> JSONResponse:
@@ -93,6 +96,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["X-Request-ID"],
     )
 
+    max_upload_request_bytes = (
+        settings.max_upload_size_bytes * settings.max_files_per_upload + MULTIPART_OVERHEAD_BYTES
+    )
+
+    @app.middleware("http")
+    async def reject_oversized_uploads(request: Request, call_next):
+        # Starlette buffers the whole multipart body before the endpoint runs,
+        # so an obviously oversized upload is refused from its Content-Length
+        # header first. Each file is still size-checked while it is read.
+        if request.method == "POST" and request.url.path == documents.UPLOAD_PATH:
+            content_length = request.headers.get("content-length", "")
+            if content_length.isdigit() and int(content_length) > max_upload_request_bytes:
+                return _error_response(
+                    413,
+                    "payload_too_large",
+                    f"Upload is too large. Each file may be at most "
+                    f"{settings.max_upload_size_mb} MB, "
+                    f"with up to {settings.max_files_per_upload} files per upload.",
+                )
+        return await call_next(request)
+
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
@@ -112,6 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _register_exception_handlers(app)
     app.include_router(system.router)
+    app.include_router(documents.router)
     return app
 
 

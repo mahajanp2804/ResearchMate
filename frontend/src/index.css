@@ -27,6 +27,9 @@
   --warning-soft: #fffaeb;
   --danger: #b42318;
   --danger-soft: #fef3f2;
+  /* Filled destructive buttons: white text needs a dark red in both themes. */
+  --danger-solid: #d92d20;
+  --danger-solid-hover: #b42318;
 
   color-scheme: light;
 }
@@ -53,6 +56,8 @@
   --warning-soft: rgb(253 176 34 / 0.12);
   --danger: #f97066;
   --danger-soft: rgb(249 112 102 / 0.12);
+  --danger-solid: #d92d20;
+  --danger-solid-hover: #f04438;
 
   color-scheme: dark;
 }
@@ -77,6 +82,8 @@
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
 
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);

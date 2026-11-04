@@ -47,6 +47,7 @@ def system_info(settings: SettingsDep) -> SystemInfo:
         embedding_model_name=settings.embedding_model_name,
         max_upload_size_mb=settings.max_upload_size_mb,
         max_files_per_upload=settings.max_files_per_upload,
+        max_pages_per_document=settings.max_pages_per_document,
         chunking=ChunkingInfo(
             chunk_size_tokens=settings.chunk_size_tokens,
             chunk_overlap_tokens=settings.chunk_overlap_tokens,

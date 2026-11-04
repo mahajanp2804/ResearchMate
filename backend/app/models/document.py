@@ -10,6 +10,7 @@ from app.models.base import TimestampMixin, UTCDateTime, new_id, string_enum
 
 if TYPE_CHECKING:
     from app.models.chunk import Chunk
+    from app.models.page import DocumentPage
 
 
 class ProcessingStatus(enum.StrEnum):
@@ -69,10 +70,20 @@ class Document(TimestampMixin, Base):
         passive_deletes=True,
         order_by="Chunk.chunk_index",
     )
+    pages: Mapped[list["DocumentPage"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="DocumentPage.page_number",
+    )
 
     @property
     def upload_date(self) -> datetime:
         return self.created_at
+
+    @property
+    def pages_without_text(self) -> list[int]:
+        return [page.page_number for page in self.pages if not page.has_text]
 
     def __repr__(self) -> str:
         return f"<Document id={self.id} filename={self.filename!r}>"

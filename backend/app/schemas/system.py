@@ -47,6 +47,7 @@ class SystemInfo(BaseModel):
     embedding_model_name: str
     max_upload_size_mb: int
     max_files_per_upload: int
+    max_pages_per_document: int
     chunking: ChunkingInfo
     retrieval: RetrievalInfo
     llm: LLMInfo

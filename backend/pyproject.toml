@@ -11,6 +11,8 @@ filterwarnings = [
     # Starlette now prefers the httpx2 fork for its TestClient; httpx still works
     # and is the project's chosen HTTP test client.
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+    # Emitted by PyMuPDF's SWIG bindings on import; not actionable here.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
 ]
 
 [tool.ruff]
