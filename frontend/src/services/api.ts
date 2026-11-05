@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  ChunkListResponse,
   DashboardStats,
   DocumentDetail,
   DocumentListResponse,
@@ -113,6 +114,15 @@ export const api = {
     request<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, { signal }),
   deleteDocument: (documentId: string) =>
     request<null>(`/api/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' }),
+  reindexDocument: (documentId: string) =>
+    request<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}/reindex`, {
+      method: 'POST',
+    }),
+  listChunks: (documentId: string, offset: number, limit: number, signal?: AbortSignal) =>
+    request<ChunkListResponse>(
+      `/api/documents/${encodeURIComponent(documentId)}/chunks?offset=${offset}&limit=${limit}`,
+      { signal },
+    ),
   uploadDocument,
   /** URL of the original PDF, optionally opened at a 1-based page. */
   documentFileUrl: (documentId: string, page?: number) =>

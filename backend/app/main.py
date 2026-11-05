@@ -20,6 +20,8 @@ from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
 from app.routers import documents, system
+from app.services.ingestion_service import TokenizerProvider
+from app.services.tokenization import get_huggingface_tokenizer
 from app.utils.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -63,10 +65,22 @@ def _register_exception_handlers(app: FastAPI) -> None:
         return _error_response(500, "internal_error", "An unexpected error occurred")
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    tokenizer_provider: TokenizerProvider | None = None,
+) -> FastAPI:
+    """Build the application.
+
+    ``tokenizer_provider`` lets tests swap in a deterministic tokenizer; by
+    default the embedding model's tokenizer is loaded on first use.
+    """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     database = Database(settings.database_url)
+    if tokenizer_provider is None:
+        model_name = settings.embedding_model_name
+        tokenizer_provider = lambda: get_huggingface_tokenizer(model_name)  # noqa: E731
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -86,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.database = database
+    app.state.tokenizer_provider = tokenizer_provider
 
     app.add_middleware(
         CORSMiddleware,

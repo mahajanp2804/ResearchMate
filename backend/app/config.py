@@ -43,8 +43,11 @@ class Settings(BaseSettings):
     max_pages_per_document: int = Field(default=500, gt=0)
 
     # --- Chunking ----------------------------------------------------------
-    chunk_size_tokens: int = Field(default=800, gt=0)
-    chunk_overlap_tokens: int = Field(default=150, ge=0)
+    # Measured with the embedding model's tokenizer. all-MiniLM-L6-v2 reads at
+    # most 256 tokens (254 plus [CLS]/[SEP]), so larger chunks would be cut off
+    # when embedded. Raise this together with a longer-context embedding model.
+    chunk_size_tokens: int = Field(default=250, ge=32)
+    chunk_overlap_tokens: int = Field(default=50, ge=0)
 
     # --- Embeddings --------------------------------------------------------
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"

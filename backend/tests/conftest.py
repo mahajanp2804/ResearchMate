@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.main import create_app
+from tests.fakes import WhitespaceTokenizer
 
 
 def make_settings(data_dir: Path, **overrides) -> Settings:
@@ -17,6 +18,13 @@ def make_settings(data_dir: Path, **overrides) -> Settings:
     return Settings(_env_file=None, **values)
 
 
+def make_app(settings: Settings, **overrides) -> FastAPI:
+    """App wired with offline fakes unless a test overrides them."""
+    values = {"tokenizer_provider": WhitespaceTokenizer}
+    values.update(overrides)
+    return create_app(settings, **values)
+
+
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
     return make_settings(tmp_path / "data")
@@ -24,7 +32,7 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def app(settings: Settings) -> FastAPI:
-    return create_app(settings)
+    return make_app(settings)
 
 
 @pytest.fixture

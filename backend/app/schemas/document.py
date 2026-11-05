@@ -26,12 +26,29 @@ class DocumentSummary(ORMModel):
 class DocumentDetail(DocumentSummary):
     file_hash: str
     embedding_model: str | None
+    chunking_signature: str | None
     indexed_at: datetime | None
     pages_without_text: list[int]
 
 
 class DocumentListResponse(BaseModel):
     items: list[DocumentSummary]
+    total: int
+
+
+class ChunkOut(ORMModel):
+    id: int
+    chunk_index: int
+    page_start: int
+    page_end: int
+    section: str | None
+    token_count: int
+    char_count: int
+    text: str
+
+
+class ChunkListResponse(BaseModel):
+    items: list[ChunkOut]
     total: int
 
 

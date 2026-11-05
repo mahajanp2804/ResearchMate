@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.database import Database
+from app.services.ingestion_service import TokenizerProvider
 
 
 def get_app_settings(request: Request) -> Settings:
     return request.app.state.settings
+
+
+def get_tokenizer_provider(request: Request) -> TokenizerProvider:
+    return request.app.state.tokenizer_provider
 
 
 def get_database(request: Request) -> Database:
@@ -32,3 +37,4 @@ def get_db(database: Annotated[Database, Depends(get_database)]) -> Iterator[Ses
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
 DbSession = Annotated[Session, Depends(get_db)]
+TokenizerProviderDep = Annotated[TokenizerProvider, Depends(get_tokenizer_provider)]

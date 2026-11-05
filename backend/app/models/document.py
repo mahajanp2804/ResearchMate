@@ -61,7 +61,8 @@ class Document(TimestampMixin, Base):
     # What the current vectors were built with. If the file hash, model and
     # chunking settings all match on re-index, re-embedding is skipped.
     embedding_model: Mapped[str | None] = mapped_column(String(255))
-    chunking_signature: Mapped[str | None] = mapped_column(String(64))
+    # e.g. "v1:sentence-transformers/all-MiniLM-L6-v2:250/50"
+    chunking_signature: Mapped[str | None] = mapped_column(String(255))
     indexed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     chunks: Mapped[list["Chunk"]] = relationship(

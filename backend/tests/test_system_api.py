@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.main import create_app
 from app.models import (
     ActivityEvent,
     ActivityType,
@@ -13,7 +12,7 @@ from app.models import (
     Message,
     MessageRole,
 )
-from tests.conftest import make_settings
+from tests.conftest import make_app, make_settings
 from tests.test_models import make_chunk, make_document
 
 
@@ -34,7 +33,7 @@ def test_lifespan_creates_data_directories(client: TestClient, app: FastAPI) -> 
 
 def test_system_info_never_exposes_secrets(tmp_path) -> None:
     settings = make_settings(tmp_path, gemini_api_key="top-secret-value")
-    with TestClient(create_app(settings)) as client:
+    with TestClient(make_app(settings)) as client:
         response = client.get("/api/system/info")
 
     assert response.status_code == 200
@@ -42,7 +41,7 @@ def test_system_info_never_exposes_secrets(tmp_path) -> None:
     assert str(tmp_path) not in response.text
     body = response.json()
     assert body["llm"]["configured"] is True
-    assert body["chunking"] == {"chunk_size_tokens": 800, "chunk_overlap_tokens": 150}
+    assert body["chunking"] == {"chunk_size_tokens": 250, "chunk_overlap_tokens": 50}
     assert body["embedding_model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
 
 

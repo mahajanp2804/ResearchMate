@@ -35,6 +35,11 @@ export function pluralize(count: number, singular: string, plural = `${singular}
   return `${formatNumber(count)} ${count === 1 ? singular : plural}`
 }
 
+/** "p. 3" or "pp. 3–4", as used in citations. */
+export function formatPageRange(start: number, end: number): string {
+  return start === end ? `p. ${start}` : `pp. ${start}–${end}`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`

@@ -1,5 +1,6 @@
 import { FileText, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { ChunksDialog } from '../components/ChunksDialog'
 import { DocumentCard } from '../components/DocumentCard'
 import { UploadQueue } from '../components/UploadQueue'
 import { UploadZone } from '../components/UploadZone'
@@ -35,7 +36,9 @@ export default function Documents() {
   const [query, setQuery] = useState('')
   const [pendingDelete, setPendingDelete] = useState<DocumentSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [reindexingId, setReindexingId] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<DocumentSummary | null>(null)
+  const [actionError, setActionError] = useState<{ title: string; message: string } | null>(null)
 
   const items = documents.data?.items
   const visible = useMemo(() => {
@@ -46,15 +49,35 @@ export default function Documents() {
   const confirmDelete = async () => {
     if (!pendingDelete) return
     setDeleting(true)
-    setDeleteError(null)
+    setActionError(null)
     try {
       await api.deleteDocument(pendingDelete.id)
       documents.reload()
     } catch (error) {
-      setDeleteError(error instanceof ApiError ? error.message : 'The paper could not be deleted.')
+      setActionError({
+        title: 'Delete failed',
+        message: error instanceof ApiError ? error.message : 'The paper could not be deleted.',
+      })
     } finally {
       setDeleting(false)
       setPendingDelete(null)
+    }
+  }
+
+  const reindex = async (document: DocumentSummary) => {
+    setReindexingId(document.id)
+    setActionError(null)
+    try {
+      // A processing failure comes back in the document's status, not as an error.
+      await api.reindexDocument(document.id)
+    } catch (error) {
+      setActionError({
+        title: 'Re-processing failed',
+        message: error instanceof ApiError ? error.message : 'The paper could not be re-processed.',
+      })
+    } finally {
+      setReindexingId(null)
+      documents.reload()
     }
   }
 
@@ -123,7 +146,7 @@ export default function Documents() {
             onRetry={documents.reload}
           />
         )}
-        {deleteError && <ErrorState title="Delete failed" message={deleteError} />}
+        {actionError && <ErrorState title={actionError.title} message={actionError.message} />}
 
         {documents.loading && !documents.data ? (
           <div className="space-y-3">
@@ -150,7 +173,14 @@ export default function Documents() {
         ) : (
           <div className="space-y-3">
             {visible.map((document) => (
-              <DocumentCard key={document.id} document={document} onDelete={setPendingDelete} />
+              <DocumentCard
+                key={document.id}
+                document={document}
+                reindexing={reindexingId === document.id}
+                onDelete={setPendingDelete}
+                onReindex={reindex}
+                onViewPassages={setViewing}
+              />
             ))}
           </div>
         )}
@@ -165,6 +195,7 @@ export default function Documents() {
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+      <ChunksDialog document={viewing} onClose={() => setViewing(null)} />
     </div>
   )
 }

@@ -56,20 +56,22 @@ acceptance criteria each phase must meet before the next one starts.
 | Persistence | SQLAlchemy 2.0 ORM, portable column types, string enums (no native DB enums) | Swapping `DATABASE_URL` to PostgreSQL needs no model changes. |
 | Background work | FastAPI background tasks + status columns polled by the UI | Uploads return immediately; no Celery/Redis needed for a single-user local app. |
 
-### Known trade-off to resolve in Phase 3/4: chunk size vs. embedding window
+### Decision (Phase 3): chunk size vs. embedding window
 
-`all-MiniLM-L6-v2` truncates input at **256 word-piece tokens**. With the requested
-800-token chunks, the dense vector would only represent roughly the first third of
-each chunk, while BM25 and the LLM see the whole chunk. Options:
+`all-MiniLM-L6-v2` truncates input at **256 word-piece tokens**. With the originally
+requested 800-token chunks, the dense vector would only represent roughly the first
+third of each chunk, while BM25 and the LLM see the whole chunk. Options considered:
 
 1. Keep 800/150 and accept truncation (dense retrieval quality drops).
-2. Use ~250-token chunks with ~50 overlap for MiniLM (matches the model; more chunks).
+2. **Chosen default:** 250-token chunks with 50 overlap, measured with MiniLM's own
+   tokenizer, so every chunk fits the model's window (250 + [CLS] + [SEP] ≤ 256).
 3. Keep 800-token chunks but switch to a 512-token model such as `BAAI/bge-small-en-v1.5`.
 
-Chunk size and model are both configurable. The Phase 11 evaluation dashboard will
-compare these settings on the same dataset so the default is chosen from measured
-numbers, and the app logs a warning whenever `CHUNK_SIZE_TOKENS` exceeds the
-embedding model's maximum sequence length.
+Chunk size, overlap and model are all configurable (`CHUNK_SIZE_TOKENS=800` restores
+option 1). The Phase 11 evaluation will compare these settings on the same dataset,
+and from Phase 4 the app logs a warning whenever `CHUNK_SIZE_TOKENS` exceeds the
+embedding model's maximum sequence length. Phase 6 can widen the context sent to the
+LLM by adding neighbouring chunks around each retrieved one.
 
 ---
 
@@ -92,7 +94,7 @@ ResearchMate/
 │   │   ├── services/
 │   │   │   ├── document_service.py    # upload, de-duplication, listing, deletion
 │   │   │   ├── ingestion_service.py   # chunk → embed → index for stored documents
-│   │   │   ├── pdf_service.py  text_cleaning.py  chunking_service.py
+│   │   │   ├── pdf_service.py  text_cleaning.py  chunking_service.py  tokenization.py
 │   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py
 │   │   │   ├── hybrid_retriever.py  reranker.py  rag_pipeline.py
 │   │   │   ├── llm_service.py  citation_service.py

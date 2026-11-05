@@ -7,6 +7,9 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "models: downloads a Hugging Face model on first run (cached afterwards); deselect with -m 'not models'",
+]
 filterwarnings = [
     # Starlette now prefers the httpx2 fork for its TestClient; httpx still works
     # and is the project's chosen HTTP test client.

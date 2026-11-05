@@ -1,4 +1,13 @@
-import { ChevronDown, ExternalLink, FileText, Trash2, TriangleAlert } from 'lucide-react'
+import {
+  ChevronDown,
+  CircleAlert,
+  ExternalLink,
+  FileText,
+  Layers,
+  RefreshCw,
+  Trash2,
+  TriangleAlert,
+} from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../services/api'
 import type { DocumentSummary } from '../types/api'
@@ -6,6 +15,7 @@ import { cn, formatBytes, formatDate, pluralize } from '../utils/format'
 import { DocumentStatusBadge } from './StatusBadge'
 import { Button } from './ui/Button'
 import { Card } from './ui/Card'
+import { Spinner } from './ui/Feedback'
 
 const TITLE_SOURCE_LABEL = {
   metadata: 'PDF metadata',
@@ -15,13 +25,23 @@ const TITLE_SOURCE_LABEL = {
 
 interface DocumentCardProps {
   document: DocumentSummary
+  reindexing: boolean
   onDelete: (document: DocumentSummary) => void
+  onReindex: (document: DocumentSummary) => void
+  onViewPassages: (document: DocumentSummary) => void
 }
 
-export function DocumentCard({ document, onDelete }: DocumentCardProps) {
+export function DocumentCard({
+  document,
+  reindexing,
+  onDelete,
+  onReindex,
+  onViewPassages,
+}: DocumentCardProps) {
   const [expanded, setExpanded] = useState(false)
   const metadata = document.extracted_metadata
   const title = document.title ?? document.filename
+  const failed = document.processing_status === 'failed'
 
   const details: [string, string | undefined][] = [
     ['File name', document.filename],
@@ -31,7 +51,6 @@ export function DocumentCard({ document, onDelete }: DocumentCardProps) {
     ['Created', metadata.created],
     ['Producer', metadata.producer],
     ['Title detected from', metadata.title_source && TITLE_SOURCE_LABEL[metadata.title_source]],
-    ['Searchable passages', document.chunk_count > 0 ? String(document.chunk_count) : undefined],
   ]
 
   return (
@@ -56,12 +75,37 @@ export function DocumentCard({ document, onDelete }: DocumentCardProps) {
             {formatBytes(document.file_size_bytes)} · Uploaded {formatDate(document.upload_date)}
           </p>
           {document.status_message && (
-            <p className="mt-3 flex gap-2 rounded-lg bg-warning-soft px-3 py-2 text-xs text-fg-muted">
-              <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+            <p
+              className={cn(
+                'mt-3 flex gap-2 rounded-lg px-3 py-2 text-xs text-fg-muted',
+                failed ? 'bg-danger-soft' : 'bg-warning-soft',
+              )}
+            >
+              {failed ? (
+                <CircleAlert className="mt-px size-3.5 shrink-0 text-danger" aria-hidden />
+              ) : (
+                <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+              )}
               {document.status_message}
             </p>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-2">
+            {failed && (
+              <Button size="sm" onClick={() => onReindex(document)} disabled={reindexing}>
+                {reindexing ? (
+                  <Spinner className="text-accent-fg" />
+                ) : (
+                  <RefreshCw className="size-3.5" aria-hidden />
+                )}
+                Retry processing
+              </Button>
+            )}
+            {document.chunk_count > 0 && (
+              <Button variant="secondary" size="sm" onClick={() => onViewPassages(document)}>
+                <Layers className="size-3.5" aria-hidden />
+                {pluralize(document.chunk_count, 'passage')}
+              </Button>
+            )}
             <a
               href={api.documentFileUrl(document.id)}
               target="_blank"

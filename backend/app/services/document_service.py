@@ -10,10 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.exceptions import InvalidInputError, NotFoundError, ResearchMateError
-from app.models import ActivityType, Document, DocumentPage, ProcessingStatus
+from app.models import ActivityType, Chunk, Document, DocumentPage, ProcessingStatus
 from app.models.base import new_id
-from app.services import pdf_service
+from app.services import ingestion_service, pdf_service
 from app.services.activity_service import record_activity
+from app.services.ingestion_service import TokenizerProvider
 from app.utils.file_validation import (
     has_pdf_extension,
     looks_like_pdf,
@@ -26,9 +27,6 @@ logger = get_logger(__name__)
 
 UploadStatus = Literal["created", "duplicate", "rejected"]
 
-# Listing every page number in a warning stops being useful past this point.
-MAX_PAGES_LISTED_IN_WARNING = 10
-
 
 @dataclass
 class UploadOutcome:
@@ -39,22 +37,32 @@ class UploadOutcome:
 
 
 def ingest_upload(
-    db: Session, settings: Settings, raw_filename: str | None, stream: BinaryIO
+    db: Session,
+    settings: Settings,
+    tokenizer_provider: TokenizerProvider,
+    raw_filename: str | None,
+    stream: BinaryIO,
 ) -> UploadOutcome:
-    """Validate, de-duplicate, extract and store one uploaded file.
+    """Validate, de-duplicate, extract, store and chunk one uploaded file.
 
-    Every failure becomes a ``rejected`` outcome with a user-facing reason, so
-    one bad file in a batch does not fail the others.
+    Every failure before storage becomes a ``rejected`` outcome with a
+    user-facing reason, so one bad file in a batch does not fail the others.
+    Once stored, a chunking failure leaves the paper in the library with
+    status ``failed`` so it can be retried.
     """
     filename = sanitize_filename(raw_filename)
     try:
-        return _ingest(db, settings, filename, stream)
+        outcome = _store(db, settings, filename, stream)
     except ResearchMateError as error:
         logger.info("Rejected upload %r: %s", filename, error.code)
         return UploadOutcome(filename=filename, status="rejected", error=error)
 
+    if outcome.status == "created" and outcome.document is not None:
+        ingestion_service.process_document(db, settings, outcome.document, tokenizer_provider)
+    return outcome
 
-def _ingest(db: Session, settings: Settings, filename: str, stream: BinaryIO) -> UploadOutcome:
+
+def _store(db: Session, settings: Settings, filename: str, stream: BinaryIO) -> UploadOutcome:
     if not has_pdf_extension(filename):
         raise InvalidInputError("Only PDF files are supported.", code="unsupported_file_type")
 
@@ -92,8 +100,9 @@ def _ingest(db: Session, settings: Settings, filename: str, stream: BinaryIO) ->
             title=extracted.title,
             page_count=extracted.page_count,
             extracted_metadata={**extracted.metadata, "title_source": extracted.title_source},
-            processing_status=ProcessingStatus.COMPLETED,
-            status_message=_missing_text_warning(
+            # Text is extracted; chunking runs next and moves this to completed.
+            processing_status=ProcessingStatus.PROCESSING,
+            status_message=ingestion_service.missing_text_warning(
                 extracted.pages_without_text, extracted.page_count
             ),
             pages=[
@@ -136,20 +145,22 @@ def _find_by_hash(db: Session, file_hash: str) -> Document | None:
     return db.scalar(select(Document).where(Document.file_hash == file_hash))
 
 
-def _missing_text_warning(pages_without_text: list[int], page_count: int) -> str | None:
-    if not pages_without_text:
-        return None
-    count = len(pages_without_text)
-    if count <= MAX_PAGES_LISTED_IN_WARNING:
-        label = "Page" if count == 1 else "Pages"
-        pages = ", ".join(str(number) for number in pages_without_text)
-        subject = f"{label} {pages} {'has' if count == 1 else 'have'}"
-    else:
-        subject = f"{count} of {page_count} pages have"
-    return (
-        f"{subject} no extractable text (likely images or scans). "
-        "That content won't be searchable because OCR is not supported yet."
+def list_chunks(
+    db: Session, document_id: str, *, limit: int, offset: int
+) -> tuple[list[Chunk], int]:
+    get_document(db, document_id)  # 404 for unknown documents
+    total = (
+        db.scalar(select(func.count()).select_from(Chunk).where(Chunk.document_id == document_id))
+        or 0
     )
+    chunks = db.scalars(
+        select(Chunk)
+        .where(Chunk.document_id == document_id)
+        .order_by(Chunk.chunk_index)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    return list(chunks), total
 
 
 def list_documents(db: Session, *, limit: int, offset: int) -> tuple[list[Document], int]:

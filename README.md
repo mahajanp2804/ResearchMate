@@ -53,3 +53,6 @@ App: http://localhost:5173. In development, Vite proxies `/api` requests to the 
 cd backend && .venv/bin/pytest && .venv/bin/ruff check .
 cd frontend && npm run build && npm run lint
 ```
+
+Tests marked `models` download the embedding model's tokenizer from Hugging Face on
+first run (it is cached afterwards). To run offline, use `.venv/bin/pytest -m "not models"`.

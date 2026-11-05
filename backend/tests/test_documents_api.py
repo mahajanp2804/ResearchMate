@@ -6,9 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.main import create_app
-from app.models import ActivityEvent, DocumentPage
-from tests.conftest import make_settings
+from app.models import ActivityEvent, Chunk, DocumentPage
+from tests.conftest import make_app, make_settings
+from tests.fakes import WhitespaceTokenizer, unavailable_tokenizer
 from tests.pdf_factory import make_pdf, paper_text, sample_paper
 
 UPLOAD_URL = "/api/documents/upload"
@@ -134,7 +134,7 @@ def test_path_traversal_filename_is_neutralised(client: TestClient, app: FastAPI
 
 
 def test_too_many_files_is_rejected(tmp_path: Path) -> None:
-    app = create_app(make_settings(tmp_path / "data", max_files_per_upload=1))
+    app = make_app(make_settings(tmp_path / "data", max_files_per_upload=1))
     with TestClient(app) as client:
         response = upload(client, ("a.pdf", sample_paper()), ("b.pdf", sample_paper("Other")))
     assert response.status_code == 422
@@ -142,7 +142,7 @@ def test_too_many_files_is_rejected(tmp_path: Path) -> None:
 
 
 def test_oversized_file_is_rejected(tmp_path: Path) -> None:
-    app = create_app(make_settings(tmp_path / "data", max_upload_size_mb=1))
+    app = make_app(make_settings(tmp_path / "data", max_upload_size_mb=1))
     oversized = b"%PDF-1.7\n" + b"0" * (1024 * 1024)
     with TestClient(app) as client:
         result = upload(client, ("big.pdf", oversized)).json()["results"][0]
@@ -151,7 +151,7 @@ def test_oversized_file_is_rejected(tmp_path: Path) -> None:
 
 
 def test_oversized_request_is_refused_before_parsing(tmp_path: Path) -> None:
-    app = create_app(make_settings(tmp_path / "data", max_upload_size_mb=1, max_files_per_upload=1))
+    app = make_app(make_settings(tmp_path / "data", max_upload_size_mb=1, max_files_per_upload=1))
     with TestClient(app) as client:
         response = upload(client, ("huge.pdf", b"%PDF-1.7\n" + b"0" * (3 * 1024 * 1024)))
     assert response.status_code == 413
@@ -204,3 +204,109 @@ def test_dashboard_reflects_uploads(client: TestClient) -> None:
     assert stats["total_papers"] == 1
     assert stats["recent_documents"][0]["title"] == "Dashboard Visible Paper Title"
     assert stats["recent_activity"][0]["description"] == "Uploaded “Dashboard Visible Paper Title”"
+
+
+# --- Chunking (Phase 3) ------------------------------------------------------
+
+
+def uploaded_document(client: TestClient, data: bytes | None = None, name: str = "paper.pdf"):
+    return upload(client, (name, data or sample_paper(pages=4))).json()["results"][0]["document"]
+
+
+def test_upload_splits_paper_into_chunks(client: TestClient) -> None:
+    document = uploaded_document(client)
+    assert document["processing_status"] == "completed"
+    assert document["chunk_count"] > 0
+
+    detail = client.get(f"/api/documents/{document['id']}").json()
+    assert detail["chunking_signature"] == "v1:test-whitespace:250/50"
+
+
+def test_chunks_endpoint_lists_passages_in_order_with_pages(client: TestClient) -> None:
+    document = uploaded_document(client)
+    body = client.get(f"/api/documents/{document['id']}/chunks").json()
+
+    assert body["total"] == document["chunk_count"]
+    indexes = [chunk["chunk_index"] for chunk in body["items"]]
+    assert indexes == sorted(indexes)
+    for chunk in body["items"]:
+        assert 1 <= chunk["page_start"] <= chunk["page_end"] <= 4
+        assert chunk["token_count"] <= 250
+        # Each test page mentions its own number, which must fall in the range.
+        for page in map(int, __import__("re").findall(r"This page (\d+)", chunk["text"])):
+            assert chunk["page_start"] <= page <= chunk["page_end"]
+
+
+def test_chunks_endpoint_paginates(client: TestClient) -> None:
+    pages = [paper_text("x", number) * 8 for number in range(1, 7)]
+    document = uploaded_document(client, make_pdf(pages, title="A Long Paper For Paging"))
+    first = client.get(f"/api/documents/{document['id']}/chunks?limit=2").json()
+    second = client.get(f"/api/documents/{document['id']}/chunks?limit=2&offset=2").json()
+    assert len(first["items"]) == 2
+    assert first["items"][-1]["chunk_index"] < second["items"][0]["chunk_index"]
+
+
+def test_chunks_for_unknown_document_is_404(client: TestClient) -> None:
+    assert client.get("/api/documents/" + "0" * 32 + "/chunks").status_code == 404
+
+
+def test_reindex_rebuilds_chunks_and_records_activity(
+    client: TestClient, db_session: Session
+) -> None:
+    document = uploaded_document(client)
+    before = client.get(f"/api/documents/{document['id']}/chunks").json()["items"]
+
+    response = client.post(f"/api/documents/{document['id']}/reindex")
+
+    assert response.status_code == 200
+    assert response.json()["processing_status"] == "completed"
+    after = client.get(f"/api/documents/{document['id']}/chunks").json()["items"]
+    assert [chunk["text"] for chunk in after] == [chunk["text"] for chunk in before]
+    # New rows: chunk ids are never reused (they double as vector ids).
+    assert min(chunk["id"] for chunk in after) > max(chunk["id"] for chunk in before)
+    events = db_session.scalars(select(ActivityEvent.event_type)).all()
+    assert events[-1].value == "document_reindexed"
+
+
+def test_reindex_unknown_document_is_404(client: TestClient) -> None:
+    assert client.post("/api/documents/" + "0" * 32 + "/reindex").status_code == 404
+
+
+def test_tokenizer_outage_keeps_paper_and_reindex_recovers(tmp_path: Path) -> None:
+    class SwitchableTokenizer:
+        available = False
+
+        def __call__(self):
+            if not self.available:
+                unavailable_tokenizer()
+            return WhitespaceTokenizer()
+
+    provider = SwitchableTokenizer()
+    app = make_app(make_settings(tmp_path / "data"), tokenizer_provider=provider)
+    with TestClient(app) as client:
+        result = upload(client, ("paper.pdf", sample_paper())).json()["results"][0]
+        # The paper is stored; only the chunking step failed.
+        assert result["status"] == "created"
+        document = result["document"]
+        assert document["processing_status"] == "failed"
+        assert "tokenizer" in document["status_message"]
+        assert document["chunk_count"] == 0
+
+        provider.available = True
+        recovered = client.post(f"/api/documents/{document['id']}/reindex").json()
+        assert recovered["processing_status"] == "completed"
+        assert recovered["status_message"] is None
+        assert recovered["chunk_count"] > 0
+
+
+def test_partial_scan_warning_survives_reindex(client: TestClient) -> None:
+    data = make_pdf([paper_text("x", 1), None, paper_text("x", 3)], title="Partly Scanned Paper")
+    document = uploaded_document(client, data)
+    reindexed = client.post(f"/api/documents/{document['id']}/reindex").json()
+    assert "Page 2 has no extractable text" in reindexed["status_message"]
+
+
+def test_delete_removes_chunks(client: TestClient, db_session: Session) -> None:
+    document = uploaded_document(client)
+    client.delete(f"/api/documents/{document['id']}")
+    assert db_session.scalars(select(Chunk)).all() == []

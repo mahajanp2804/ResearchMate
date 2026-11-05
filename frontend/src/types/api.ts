@@ -111,8 +111,26 @@ export interface DocumentSummary {
 export interface DocumentDetail extends DocumentSummary {
   file_hash: string
   embedding_model: string | null
+  chunking_signature: string | null
   indexed_at: string | null
   pages_without_text: number[]
+}
+
+/** A passage the paper was split into; the unit that retrieval returns. */
+export interface Chunk {
+  id: number
+  chunk_index: number
+  page_start: number
+  page_end: number
+  section: string | null
+  token_count: number
+  char_count: number
+  text: string
+}
+
+export interface ChunkListResponse {
+  items: Chunk[]
+  total: number
 }
 
 export interface DocumentListResponse {

@@ -3,17 +3,19 @@ from typing import Annotated
 from fastapi import APIRouter, File, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.dependencies import DbSession, SettingsDep
+from app.dependencies import DbSession, SettingsDep, TokenizerProviderDep
 from app.exceptions import InvalidInputError
 from app.schemas.common import ErrorDetail
 from app.schemas.document import (
+    ChunkListResponse,
+    ChunkOut,
     DocumentDetail,
     DocumentListResponse,
     DocumentSummary,
     UploadResponse,
     UploadResult,
 )
-from app.services import document_service
+from app.services import document_service, ingestion_service
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -29,10 +31,12 @@ def upload_documents(
     files: Annotated[list[UploadFile], File(description="One or more PDF files")],
     db: DbSession,
     settings: SettingsDep,
+    tokenizer_provider: TokenizerProviderDep,
     response: Response,
 ) -> UploadResponse:
     """Upload PDFs. Each file gets its own result: created, duplicate or rejected.
 
+    New papers are extracted and split into chunks during the request.
     Returns 201 when at least one new document was stored, otherwise 200.
     """
     if len(files) > settings.max_files_per_upload:
@@ -43,7 +47,9 @@ def upload_documents(
 
     results: list[UploadResult] = []
     for upload in files:
-        outcome = document_service.ingest_upload(db, settings, upload.filename, upload.file)
+        outcome = document_service.ingest_upload(
+            db, settings, tokenizer_provider, upload.filename, upload.file
+        )
         results.append(
             UploadResult(
                 filename=outcome.filename,
@@ -88,6 +94,37 @@ def list_documents(
 @router.get("/{document_id}", response_model=DocumentDetail)
 def get_document(document_id: str, db: DbSession) -> DocumentDetail:
     return DocumentDetail.model_validate(document_service.get_document(db, document_id))
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentDetail)
+def reindex_document(
+    document_id: str,
+    db: DbSession,
+    settings: SettingsDep,
+    tokenizer_provider: TokenizerProviderDep,
+) -> DocumentDetail:
+    """Rebuild a paper's chunks from its stored page text with the current settings.
+
+    Also the retry path for a paper whose processing failed. A failure is
+    reported in the returned ``processing_status`` and ``status_message``.
+    """
+    document = document_service.get_document(db, document_id)
+    ingestion_service.reindex_document(db, settings, document, tokenizer_provider)
+    return DocumentDetail.model_validate(document)
+
+
+@router.get("/{document_id}/chunks", response_model=ChunkListResponse)
+def list_chunks(
+    document_id: str,
+    db: DbSession,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ChunkListResponse:
+    """The passages a paper was split into, in reading order, with their pages."""
+    chunks, total = document_service.list_chunks(db, document_id, limit=limit, offset=offset)
+    return ChunkListResponse(
+        items=[ChunkOut.model_validate(chunk) for chunk in chunks], total=total
+    )
 
 
 @router.get(
