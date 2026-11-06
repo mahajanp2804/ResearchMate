@@ -52,9 +52,11 @@ acceptance criteria each phase must meet before the next one starts.
 | Citations | Sources numbered `[S1]…[Sn]` in the prompt; markers in the answer are parsed and validated against the sources actually sent | The LLM never writes page numbers or file names itself, so it cannot invent them. |
 | Prompt injection | Document text is wrapped in delimited, labelled source blocks and the system prompt states it is untrusted data | Instructions inside a PDF are treated as content to quote, not orders to follow. |
 | LLM layer | `LLMProvider` abstract base class; `GeminiProvider` first; provider chosen by config | A local model (e.g. Ollama) or another API is a new class, not a pipeline rewrite. |
-| Re-embedding | Skip when `file_hash`, embedding model and chunking config are unchanged | Re-indexing an unchanged paper is free. |
+| Re-embedding | Re-index compares the chunking signature, embedding model and stored vectors and returns `unchanged`, `reembedding` (chunks kept) or `rechunked` | Re-indexing an unchanged paper is free; a model change only re-embeds. |
 | Persistence | SQLAlchemy 2.0 ORM, portable column types, string enums (no native DB enums) | Swapping `DATABASE_URL` to PostgreSQL needs no model changes. |
 | Background work | FastAPI background tasks + status columns polled by the UI | Uploads return immediately; no Celery/Redis needed for a single-user local app. |
+| Startup consistency | On start, interrupted work is reset, papers whose vectors are missing or from another model are marked not indexed, and orphaned vectors are removed | Statuses always describe what is really in the index, even after a crash. |
+| PyTorch + FAISS on macOS | Load torch before faiss, keep FAISS single-threaded, allow the second OpenMP runtime (`KMP_DUPLICATE_LIB_OK`) | Both macOS wheels bundle their own OpenMP; any other combination segfaults. A test checks FAISS results against NumPy in a subprocess. |
 
 ### Decision (Phase 3): chunk size vs. embedding window
 
@@ -188,7 +190,9 @@ commands to verify it. A phase is not "done" until its tests pass.
 - Batched, normalised Sentence-Transformers embeddings (model cached once per process).
 - Persistent FAISS `IndexIDMap2`, incremental add, `remove_ids` on delete, index manifest (model name + dimension) to detect model changes.
 - `POST /api/documents/{id}/reindex`; skip re-embedding when content and config are unchanged.
+- Embedding runs as a background task after upload/re-index; the UI polls `indexing_status`.
 - **Done when:** tests cover add/search/persist/reload/delete and the skip-if-unchanged path.
+- **Status: done.** Docker (Phase 13) must install the CPU-only PyTorch wheel; the default Linux wheel pulls in CUDA.
 
 ### Phase 5 — Dense retrieval & BM25
 - Dense top-K with document filtering via FAISS ID selectors.

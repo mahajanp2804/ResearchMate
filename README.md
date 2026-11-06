@@ -4,8 +4,8 @@ AI-powered research paper analysis. Upload academic papers, ask questions across
 them, compare methods and results, and surface research gaps. Every answer comes
 from your papers and cites the document, page and passage it relies on.
 
-> **Status:** under active development. Phase 1 (project setup and architecture)
-> is complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
+> **Status:** under active development. Phases 1–4 (setup, PDF ingestion, chunking,
+> embeddings and the FAISS index) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
 > phase plan. Full documentation will be added in Phase 13.
 
 ## Planned pipeline
@@ -36,6 +36,11 @@ cp .env.example .env          # then add GEMINI_API_KEY
 ```
 
 API docs: http://localhost:8000/docs
+
+The first paper you upload downloads the embedding model
+(`sentence-transformers/all-MiniLM-L6-v2`, about 90 MB) from Hugging Face; it is cached
+for later runs. Uploads respond immediately and papers become searchable once the
+background indexing finishes.
 
 ### Frontend
 
