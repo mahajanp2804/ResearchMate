@@ -30,12 +30,13 @@ def test_fake_embedder_is_deterministic_and_normalised() -> None:
     assert not vectors[2].any()
 
 
+@pytest.fixture(scope="module")
+def embedder():
+    return get_sentence_transformer_embedder(MODEL, device="cpu", batch_size=8)
+
+
 @pytest.mark.models
 class TestSentenceTransformerEmbedder:
-    @pytest.fixture(scope="class")
-    def embedder(self):
-        return get_sentence_transformer_embedder(MODEL, device="cpu", batch_size=8)
-
     def test_reports_model_properties(self, embedder) -> None:
         assert embedder.name == MODEL
         assert embedder.dimension == 384
