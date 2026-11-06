@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     # --- Embeddings --------------------------------------------------------
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_batch_size: int = Field(default=32, gt=0)
-    embedding_device: str = "cpu"
+    # "mps" uses the Apple Silicon GPU; "cpu" is the portable default.
+    embedding_device: Literal["cpu", "mps", "cuda"] = "cpu"
+    # Some models (e.g. BGE, E5) expect an instruction before search queries.
+    # all-MiniLM-L6-v2 does not, so it is empty by default.
+    embedding_query_prefix: str = ""
 
     # --- Retrieval ---------------------------------------------------------
     dense_top_k: int = Field(default=30, gt=0)

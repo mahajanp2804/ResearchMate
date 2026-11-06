@@ -8,3 +8,7 @@ sqlalchemy==2.1.8
 python-multipart==0.0.33
 pymupdf==2.1
 tokenizers==0.23.3
+# Brings in torch and transformers. Docker installs the CPU-only torch wheel first.
+sentence-transformers==6.2.0
+faiss-cpu==1.15.1
+numpy==2.5.4
