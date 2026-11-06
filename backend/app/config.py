@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # --- Retrieval ---------------------------------------------------------
     dense_top_k: int = Field(default=30, gt=0)
     bm25_top_k: int = Field(default=30, gt=0)
+    # BM25 term-frequency saturation (k1) and document-length normalisation (b);
+    # 1.5 and 0.75 are the standard Okapi defaults.
+    bm25_k1: float = Field(default=1.5, gt=0)
+    bm25_b: float = Field(default=0.75, ge=0, le=1)
     rrf_k: int = Field(default=60, gt=0)
     reranker_enabled: bool = True
     reranker_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
