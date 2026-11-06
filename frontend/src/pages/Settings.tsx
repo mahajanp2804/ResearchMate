@@ -6,6 +6,7 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { ErrorState, Skeleton } from '../components/ui/Feedback'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
+import { formatNumber } from '../utils/format'
 
 function SettingRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -70,6 +71,7 @@ export default function Settings() {
             info && (
               <dl className="divide-y divide-border">
                 <SettingRow label="Embedding model" value={info.embedding_model_name} />
+                <SettingRow label="Embedding device" value={info.embedding_device} />
                 <SettingRow
                   label="Reranker"
                   value={
@@ -137,12 +139,24 @@ export default function Settings() {
         </Card>
 
         <Card>
-          <CardHeader title="About" />
+          <CardHeader title="System" description="Search index and application" />
           {loading && !info ? (
             <SettingsSkeleton />
           ) : (
             info && (
               <dl className="divide-y divide-border">
+                <SettingRow
+                  label="Vectors in search index"
+                  value={formatNumber(info.vector_index.vector_count)}
+                />
+                <SettingRow
+                  label="Vector dimension"
+                  value={info.vector_index.dimension ?? 'Set when the first paper is indexed'}
+                />
+                <SettingRow
+                  label="Index built with"
+                  value={info.vector_index.model_name ?? '—'}
+                />
                 <SettingRow label="Application" value={info.app_name} />
                 <SettingRow label="Version" value={info.version} />
                 <SettingRow label="Environment" value={info.environment} />
