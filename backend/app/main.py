@@ -109,6 +109,7 @@ def create_app(
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         settings.ensure_directories()
         database.create_tables()
+        ingestion.reconcile()
         if not settings.llm_configured:
             logger.warning("GEMINI_API_KEY is not set; question answering will be unavailable")
         logger.info("%s %s started", settings.app_name, settings.app_version)

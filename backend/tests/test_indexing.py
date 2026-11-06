@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.models import Document
 from tests.conftest import make_app, make_settings
 from tests.fakes import HashingEmbedder, unavailable_embedder
 from tests.pdf_factory import make_pdf, paper_text, sample_paper
@@ -187,3 +188,71 @@ def test_embedding_outage_is_recorded_and_recoverable(tmp_path: Path) -> None:
 def test_dashboard_counts_indexed_papers(client: TestClient) -> None:
     upload(client, sample_paper())
     assert client.get("/api/dashboard/stats").json()["indexed_papers"] == 1
+
+
+# --- Startup consistency check -----------------------------------------------
+
+
+def set_statuses(app: FastAPI, document_id: str, **values) -> None:
+    with app.state.database.session() as db:
+        document = db.get(Document, document_id)
+        for field, value in values.items():
+            setattr(document, field, value)
+        db.commit()
+
+
+def test_restart_resets_interrupted_work(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "data")
+    app = make_app(settings)
+    with TestClient(app) as client:
+        first = upload(client, sample_paper("First Paper on Federated Learning"), "a.pdf")
+        second = upload(client, sample_paper("Second Paper on Client Drift"), "b.pdf")
+        # Simulate a shutdown in the middle of uploading and indexing.
+        set_statuses(app, first["id"], processing_status="processing")
+        set_statuses(app, second["id"], indexing_status="indexing")
+
+    with TestClient(make_app(settings)) as client:
+        first = client.get(f"/api/documents/{first['id']}").json()
+        assert first["processing_status"] == "failed"
+        assert "interrupted" in first["status_message"]
+        second = client.get(f"/api/documents/{second['id']}").json()
+        assert second["indexing_status"] == "not_indexed"
+
+
+def test_restart_without_index_file_marks_papers_not_indexed(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "data")
+    with TestClient(make_app(settings)) as client:
+        document = upload(client, sample_paper())
+    for path in settings.index_dir.iterdir():
+        path.unlink()
+
+    with TestClient(make_app(settings)) as client:
+        status = client.get(f"/api/documents/{document['id']}").json()["indexing_status"]
+        assert status == "not_indexed"
+        assert reindex(client, document["id"]) == "reembedding"
+        status = client.get(f"/api/documents/{document['id']}").json()["indexing_status"]
+        assert status == "indexed"
+
+
+def test_restart_with_a_different_model_marks_papers_not_indexed(tmp_path: Path) -> None:
+    with TestClient(make_app(make_settings(tmp_path / "data"))) as client:
+        document = upload(client, sample_paper())
+
+    settings = make_settings(tmp_path / "data", embedding_model_name="another/model")
+    with TestClient(make_app(settings)) as client:
+        status = client.get(f"/api/documents/{document['id']}").json()["indexing_status"]
+        assert status == "not_indexed"
+
+
+def test_restart_removes_orphaned_vectors(tmp_path: Path) -> None:
+    settings = make_settings(tmp_path / "data")
+    app = make_app(settings)
+    with TestClient(app) as client:
+        document = upload(client, sample_paper())
+        ids = chunk_ids(client, document["id"])
+        store = app.state.ingestion.vector_store
+        store.add([999_999], app.state.test_embedder.embed_documents(["left behind"]))
+
+    restarted = make_app(settings)
+    with TestClient(restarted):
+        assert vector_ids(restarted) == ids

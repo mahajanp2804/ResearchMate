@@ -266,6 +266,67 @@ class IngestionService:
                     document.status_message = _failure_message(error, "indexing the paper")
                     db.commit()
 
+    # --- Startup consistency check -----------------------------------------
+
+    def reconcile(self) -> None:
+        """Make document statuses match the vector index after a restart.
+
+        Handles work interrupted by a shutdown, a missing or unreadable index
+        file, an embedding model changed in the configuration, and vectors
+        left behind by a deletion that did not finish.
+        """
+        with self.database.session() as db:
+            interrupted_processing = db.execute(
+                update(Document)
+                .where(Document.processing_status == ProcessingStatus.PROCESSING)
+                .values(
+                    processing_status=ProcessingStatus.FAILED,
+                    status_message="Processing was interrupted. Retry to finish it.",
+                )
+            ).rowcount
+            interrupted_indexing = db.execute(
+                update(Document)
+                .where(Document.indexing_status == IndexingStatus.INDEXING)
+                .values(indexing_status=IndexingStatus.NOT_INDEXED)
+            ).rowcount
+
+            stored_ids = self.vector_store.ids()
+            # Vectors from another model are not comparable with new queries.
+            store_matches_model = self.vector_store.model_name == self.settings.embedding_model_name
+            chunk_ids_by_document: dict[str, set[int]] = {}
+            for document_id, chunk_id in db.execute(select(Chunk.document_id, Chunk.id)):
+                chunk_ids_by_document.setdefault(document_id, set()).add(chunk_id)
+
+            unindexed = 0
+            indexed = db.scalars(
+                select(Document).where(Document.indexing_status == IndexingStatus.INDEXED)
+            )
+            for document in indexed:
+                if not (
+                    store_matches_model
+                    and document.embedding_model == self.settings.embedding_model_name
+                    and chunk_ids_by_document.get(document.id, set()) <= stored_ids
+                ):
+                    document.indexing_status = IndexingStatus.NOT_INDEXED
+                    unindexed += 1
+            db.commit()
+
+        orphans: set[int] = set()
+        if store_matches_model:
+            all_chunk_ids = set().union(*chunk_ids_by_document.values())
+            orphans = stored_ids - all_chunk_ids
+            self.vector_store.remove(orphans)
+
+        if interrupted_processing or interrupted_indexing or unindexed or orphans:
+            logger.warning(
+                "Startup check: %d interrupted uploads, %d interrupted indexing runs, "
+                "%d papers need re-indexing, %d orphaned vectors removed",
+                interrupted_processing,
+                interrupted_indexing,
+                unindexed,
+                len(orphans),
+            )
+
     # --- Deletion ----------------------------------------------------------
 
     def remove_vectors(self, chunk_ids: list[int]) -> None:
