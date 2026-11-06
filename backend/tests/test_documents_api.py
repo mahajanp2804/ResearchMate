@@ -251,16 +251,17 @@ def test_chunks_for_unknown_document_is_404(client: TestClient) -> None:
     assert client.get("/api/documents/" + "0" * 32 + "/chunks").status_code == 404
 
 
-def test_reindex_rebuilds_chunks_and_records_activity(
+def test_forced_reindex_rebuilds_chunks_and_records_activity(
     client: TestClient, db_session: Session
 ) -> None:
     document = uploaded_document(client)
     before = client.get(f"/api/documents/{document['id']}/chunks").json()["items"]
 
-    response = client.post(f"/api/documents/{document['id']}/reindex")
+    response = client.post(f"/api/documents/{document['id']}/reindex?force=true")
 
     assert response.status_code == 200
-    assert response.json()["processing_status"] == "completed"
+    assert response.json()["action"] == "rechunked"
+    assert response.json()["document"]["processing_status"] == "completed"
     after = client.get(f"/api/documents/{document['id']}/chunks").json()["items"]
     assert [chunk["text"] for chunk in after] == [chunk["text"] for chunk in before]
     # New rows: chunk ids are never reused (they double as vector ids).
@@ -294,7 +295,9 @@ def test_tokenizer_outage_keeps_paper_and_reindex_recovers(tmp_path: Path) -> No
         assert document["chunk_count"] == 0
 
         provider.available = True
-        recovered = client.post(f"/api/documents/{document['id']}/reindex").json()
+        response = client.post(f"/api/documents/{document['id']}/reindex").json()
+        assert response["action"] == "rechunked"
+        recovered = response["document"]
         assert recovered["processing_status"] == "completed"
         assert recovered["status_message"] is None
         assert recovered["chunk_count"] > 0
@@ -303,8 +306,8 @@ def test_tokenizer_outage_keeps_paper_and_reindex_recovers(tmp_path: Path) -> No
 def test_partial_scan_warning_survives_reindex(client: TestClient) -> None:
     data = make_pdf([paper_text("x", 1), None, paper_text("x", 3)], title="Partly Scanned Paper")
     document = uploaded_document(client, data)
-    reindexed = client.post(f"/api/documents/{document['id']}/reindex").json()
-    assert "Page 2 has no extractable text" in reindexed["status_message"]
+    reindexed = client.post(f"/api/documents/{document['id']}/reindex?force=true").json()
+    assert "Page 2 has no extractable text" in reindexed["document"]["status_message"]
 
 
 def test_delete_removes_chunks(client: TestClient, db_session: Session) -> None:

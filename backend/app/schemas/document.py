@@ -36,6 +36,14 @@ class DocumentListResponse(BaseModel):
     total: int
 
 
+class ReindexResponse(BaseModel):
+    # unchanged: nothing to do; reembedding: chunks kept, vectors rebuilt in the
+    # background; rechunked: chunks rebuilt, then re-embedded; failed: see
+    # document.status_message.
+    action: Literal["unchanged", "reembedding", "rechunked", "failed"]
+    document: DocumentDetail
+
+
 class ChunkOut(ORMModel):
     id: int
     chunk_index: int

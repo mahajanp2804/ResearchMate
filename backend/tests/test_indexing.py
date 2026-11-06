@@ -70,15 +70,86 @@ def test_delete_removes_only_that_papers_vectors(client: TestClient, app: FastAP
     assert vector_ids(app) == second_ids
 
 
-def test_reindex_replaces_vectors(client: TestClient, app: FastAPI) -> None:
+def reindex(client: TestClient, document_id: str, force: bool = False) -> str:
+    query = "?force=true" if force else ""
+    return client.post(f"/api/documents/{document_id}/reindex{query}").json()["action"]
+
+
+def test_forced_reindex_replaces_vectors(client: TestClient, app: FastAPI) -> None:
     document = upload(client, sample_paper())
     before = vector_ids(app)
 
-    client.post(f"/api/documents/{document['id']}/reindex")
+    assert reindex(client, document["id"], force=True) == "rechunked"
 
     after = vector_ids(app)
     assert after == chunk_ids(client, document["id"])
     assert after.isdisjoint(before)  # old chunk ids and their vectors are gone
+
+
+def test_reindex_skips_an_up_to_date_paper(client: TestClient, app: FastAPI) -> None:
+    document = upload(client, sample_paper())
+    ids = chunk_ids(client, document["id"])
+    embedded = app.state.test_embedder.texts_embedded
+
+    assert reindex(client, document["id"]) == "unchanged"
+
+    assert chunk_ids(client, document["id"]) == ids
+    assert app.state.test_embedder.texts_embedded == embedded  # nothing re-embedded
+
+
+def test_missing_vectors_are_re_embedded_without_rechunking(
+    client: TestClient, app: FastAPI
+) -> None:
+    document = upload(client, sample_paper())
+    ids = chunk_ids(client, document["id"])
+    app.state.ingestion.vector_store.remove(ids)
+
+    assert reindex(client, document["id"]) == "reembedding"
+
+    assert chunk_ids(client, document["id"]) == ids  # same chunks
+    assert vector_ids(app) == ids  # vectors restored
+
+
+LONG_PAGES = [
+    " ".join(f"Sentence {page}.{index} about topic {page * 10 + index}." for index in range(30))
+    for page in range(1, 4)
+]
+
+
+def test_changed_chunk_settings_trigger_rechunking(tmp_path: Path) -> None:
+    with TestClient(make_app(make_settings(tmp_path / "data"))) as client:
+        document = upload(client, make_pdf(LONG_PAGES, title="A Paper With Long Pages"))
+
+    smaller_chunks = make_settings(tmp_path / "data", chunk_size_tokens=40, chunk_overlap_tokens=8)
+    app = make_app(smaller_chunks)
+    with TestClient(app) as client:
+        assert reindex(client, document["id"]) == "rechunked"
+        detail = client.get(f"/api/documents/{document['id']}").json()
+        assert detail["chunking_signature"].endswith(":40/8")
+        assert detail["chunk_count"] > document["chunk_count"]
+        assert vector_ids(app) == chunk_ids(client, document["id"])
+
+
+def test_changed_embedding_model_re_embeds_every_paper(tmp_path: Path) -> None:
+    with TestClient(make_app(make_settings(tmp_path / "data"))) as client:
+        first = upload(client, sample_paper("First Paper on Federated Learning"), "a.pdf")
+        second = upload(client, sample_paper("Second Paper on Client Drift"), "b.pdf")
+
+    app = make_app(make_settings(tmp_path / "data", embedding_model_name="another/model"))
+    with TestClient(app) as client:
+        ids = chunk_ids(client, first["id"])
+        assert reindex(client, first["id"]) == "reembedding"
+        assert chunk_ids(client, first["id"]) == ids  # chunks kept, only vectors rebuilt
+
+        store = app.state.ingestion.vector_store
+        assert store.model_name == "another/model"
+        assert store.ids() == ids  # vectors from the old model were all discarded
+        # The other paper's old vectors are gone too, and it says so.
+        assert client.get(f"/api/documents/{second['id']}").json()["indexing_status"] == (
+            "not_indexed"
+        )
+        assert reindex(client, second["id"]) == "reembedding"
+        assert client.get(f"/api/documents/{second['id']}").json()["indexing_status"] == "indexed"
 
 
 def test_embedding_outage_is_recorded_and_recoverable(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from app.schemas.document import (
     DocumentDetail,
     DocumentListResponse,
     DocumentSummary,
+    ReindexResponse,
     UploadResponse,
     UploadResult,
 )
@@ -101,22 +102,26 @@ def get_document(document_id: str, db: DbSession) -> DocumentDetail:
     return DocumentDetail.model_validate(document_service.get_document(db, document_id))
 
 
-@router.post("/{document_id}/reindex", response_model=DocumentDetail)
+@router.post("/{document_id}/reindex", response_model=ReindexResponse)
 def reindex_document(
     document_id: str,
     db: DbSession,
     ingestion: IngestionDep,
     background_tasks: BackgroundTasks,
-) -> DocumentDetail:
-    """Rebuild a paper's chunks from its stored page text and re-embed them.
+    force: Annotated[bool, Query(description="Rebuild chunks and vectors even if current")] = False,
+) -> ReindexResponse:
+    """Bring a paper up to date with the current chunking and embedding settings.
 
-    Also the retry path for a paper whose processing failed. A failure is
-    reported in the returned ``processing_status`` and ``status_message``.
+    Only the stale parts are redone: unchanged papers are skipped, a model
+    change re-embeds existing chunks, and a chunking change rebuilds both.
+    Embedding runs in the background. Also the retry path for failed papers;
+    a failure is reported in the returned document's status and message.
     """
     document = document_service.get_document(db, document_id)
-    if ingestion.reindex(db, document):
+    action = ingestion.reindex(db, document, force=force)
+    if action in ("rechunked", "reembedding"):
         background_tasks.add_task(ingestion.index_document, document.id)
-    return DocumentDetail.model_validate(document)
+    return ReindexResponse(action=action, document=DocumentDetail.model_validate(document))
 
 
 @router.get("/{document_id}/chunks", response_model=ChunkListResponse)

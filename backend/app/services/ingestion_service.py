@@ -11,8 +11,9 @@ UI shows) instead of being raised, so a paper is never lost and can be retried.
 """
 
 from collections.abc import Callable
+from typing import Literal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -31,6 +32,7 @@ logger = get_logger(__name__)
 
 TokenizerProvider = Callable[[], Tokenizer]
 EmbedderProvider = Callable[[], Embedder]
+ReindexAction = Literal["unchanged", "reembedding", "rechunked", "failed"]
 
 # Listing every page number in a warning stops being useful past this point.
 MAX_PAGES_LISTED_IN_WARNING = 10
@@ -150,22 +152,68 @@ class IngestionService:
             db.commit()
             return False
 
-    def reindex(self, db: Session, document: Document) -> bool:
-        """Rebuild a document's chunks; returns True if indexing should be scheduled."""
-        queued = self.process(db, document)
+    def _expected_signature(self) -> str | None:
+        try:
+            tokenizer_name = self._tokenizer_provider().name
+        except Exception:
+            return None  # re-chunking will fail too and record the reason
+        return chunking_service.chunking_signature(
+            tokenizer_name, self.settings.chunk_size_tokens, self.settings.chunk_overlap_tokens
+        )
+
+    def _is_fully_indexed(self, db: Session, document: Document) -> bool:
+        return (
+            document.indexing_status == IndexingStatus.INDEXED
+            and document.embedding_model == self.settings.embedding_model_name
+            and set(_chunk_ids(db, document.id)) <= self.vector_store.ids()
+        )
+
+    def reindex(self, db: Session, document: Document, *, force: bool = False) -> ReindexAction:
+        """Bring a document up to date with the current settings, doing as little as possible.
+
+        - ``rechunked``: chunking settings changed, processing had failed, or
+          ``force`` was set. Chunks are rebuilt, then re-embedded.
+        - ``reembedding``: chunks are current but vectors are missing, failed,
+          or came from another embedding model. Only embedding is redone.
+        - ``unchanged``: nothing to do; no model is loaded and nothing is embedded.
+        - ``failed``: re-chunking failed; the reason is on the document.
+
+        The caller schedules ``index_document`` for ``rechunked`` and ``reembedding``.
+        """
+        needs_rechunk = (
+            force
+            or document.processing_status != ProcessingStatus.COMPLETED
+            or document.chunking_signature != self._expected_signature()
+        )
+        if needs_rechunk:
+            action: ReindexAction = "rechunked" if self.process(db, document) else "failed"
+        elif self._is_fully_indexed(db, document):
+            return "unchanged"
+        else:
+            document.indexing_status = IndexingStatus.INDEXING
+            action = "reembedding"
+
         title = document.title or document.filename
         record_activity(db, ActivityType.DOCUMENT_REINDEXED, f"Re-indexed “{title}”", document.id)
         db.commit()
-        return queued
+        return action
 
     # --- Embedding and indexing (background) -------------------------------
 
-    def _load_embedder(self) -> Embedder:
+    def _load_embedder(self, db: Session) -> Embedder:
         embedder = self._embedder_provider()
         if not self._checked_chunk_size:
             warn_if_chunks_exceed_model(embedder, self.settings.chunk_size_tokens)
             self._checked_chunk_size = True
-        self.vector_store.ensure_model(embedder.name, embedder.dimension)
+        if self.vector_store.ensure_model(embedder.name, embedder.dimension):
+            # Vectors from the previous model were discarded, so no paper is
+            # searchable any more until it is re-embedded.
+            db.execute(
+                update(Document)
+                .where(Document.indexing_status == IndexingStatus.INDEXED)
+                .values(indexing_status=IndexingStatus.NOT_INDEXED)
+            )
+            db.commit()
         return embedder
 
     def index_document(self, document_id: str) -> None:
@@ -180,7 +228,7 @@ class IngestionService:
             document.indexing_status = IndexingStatus.INDEXING
             db.commit()
             try:
-                embedder = self._load_embedder()
+                embedder = self._load_embedder(db)
                 chunks = list(
                     db.scalars(
                         select(Chunk)
@@ -202,6 +250,10 @@ class IngestionService:
                 document.indexing_status = IndexingStatus.INDEXED
                 document.embedding_model = embedder.name
                 document.indexed_at = utcnow()
+                # Clears any earlier indexing error, keeping content warnings.
+                document.status_message = missing_text_warning(
+                    document.pages_without_text, document.page_count or 0
+                )
                 db.commit()
                 logger.info("Indexed %d chunks of document %s", len(chunk_ids), document_id)
             except Exception as error:
