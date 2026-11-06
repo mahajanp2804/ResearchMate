@@ -20,6 +20,7 @@ import { ErrorState, Skeleton } from '../components/ui/Feedback'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
 import type { ActivityItem, RecentDocument } from '../types/api'
+import { BUSY_POLL_MS, isDocumentBusy } from '../utils/documents'
 import { formatNumber, formatRelativeTime, pluralize } from '../utils/format'
 
 const QUICK_ACTIONS: { to: string; title: string; description: string; icon: LucideIcon }[] = [
@@ -127,7 +128,10 @@ function RecentActivity({ events }: { events: ActivityItem[] }) {
 }
 
 export default function Dashboard() {
-  const { data: stats, error, loading, reload } = useApi(api.dashboardStats)
+  const { data: stats, error, loading, reload } = useApi(api.dashboardStats, {
+    pollMs: BUSY_POLL_MS,
+    pollWhile: (current) => current.recent_documents.some(isDocumentBusy),
+  })
 
   return (
     <div className="space-y-6">

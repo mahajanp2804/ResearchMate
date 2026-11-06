@@ -8,24 +8,33 @@ interface ApiState<T> {
   reload: () => void
 }
 
+interface ApiOptions<T> {
+  /** Repeat the call every `pollMs` milliseconds, quietly (no `loading` flicker). */
+  pollMs?: number
+  /** With `pollMs`, only poll while this returns true for the latest data. */
+  pollWhile?: (data: T) => boolean
+}
+
 /**
  * Runs an API call on mount (and whenever `reload` is called), aborting the
- * request if the component unmounts. With `pollMs`, the call repeats quietly
- * in the background without flipping `loading` back on.
+ * request if the component unmounts.
  */
 export function useApi<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
-  options: { pollMs?: number } = {},
+  options: ApiOptions<T> = {},
 ): ApiState<T> {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<ApiError | null>(null)
   const [loading, setLoading] = useState(true)
   const [reloadToken, setReloadToken] = useState(0)
-  // Keep the latest fetcher without re-running the effect when callers pass
-  // an inline function.
+  // Keep the latest callbacks and data without re-running the effect when
+  // callers pass inline functions.
   const fetcherRef = useRef(fetcher)
+  const pollWhileRef = useRef(options.pollWhile)
+  const dataRef = useRef<T | null>(null)
   useLayoutEffect(() => {
     fetcherRef.current = fetcher
+    pollWhileRef.current = options.pollWhile
   })
 
   useEffect(() => {
@@ -34,6 +43,7 @@ export function useApi<T>(
     const run = async () => {
       try {
         const result = await fetcherRef.current(controller.signal)
+        dataRef.current = result
         setData(result)
         setError(null)
       } catch (cause) {
@@ -48,8 +58,14 @@ export function useApi<T>(
       }
     }
 
+    const poll = () => {
+      const shouldPoll = pollWhileRef.current
+      if (shouldPoll && (dataRef.current === null || !shouldPoll(dataRef.current))) return
+      void run()
+    }
+
     void run()
-    const timer = options.pollMs ? window.setInterval(run, options.pollMs) : undefined
+    const timer = options.pollMs ? window.setInterval(poll, options.pollMs) : undefined
 
     return () => {
       controller.abort()

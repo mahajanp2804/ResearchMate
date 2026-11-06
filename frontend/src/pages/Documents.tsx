@@ -13,6 +13,7 @@ import { useApi } from '../hooks/useApi'
 import { isActiveUpload, useUploadQueue } from '../hooks/useUploadQueue'
 import { ApiError, api } from '../services/api'
 import type { DocumentSummary } from '../types/api'
+import { BUSY_POLL_MS, isDocumentBusy } from '../utils/documents'
 import { pluralize } from '../utils/format'
 
 // Used until /api/system/info has loaded; the server enforces the real limits.
@@ -29,7 +30,11 @@ function matchesQuery(document: DocumentSummary, query: string): boolean {
 
 export default function Documents() {
   const { data: info } = useApi(api.systemInfo)
-  const documents = useApi(api.listDocuments)
+  // Refresh while any paper is still being processed or indexed in the background.
+  const documents = useApi(api.listDocuments, {
+    pollMs: BUSY_POLL_MS,
+    pollWhile: (list) => list.items.some(isDocumentBusy),
+  })
   const maxSizeMb = info?.max_upload_size_mb ?? DEFAULT_MAX_SIZE_MB
   const uploads = useUploadQueue({ maxSizeMb, onUploaded: documents.reload })
 
