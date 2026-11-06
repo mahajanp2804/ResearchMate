@@ -5,6 +5,7 @@ import type {
   DocumentDetail,
   DocumentListResponse,
   HealthResponse,
+  ReindexResponse,
   SystemInfo,
   UploadResponse,
 } from '../types/api'
@@ -114,10 +115,12 @@ export const api = {
     request<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}`, { signal }),
   deleteDocument: (documentId: string) =>
     request<null>(`/api/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' }),
-  reindexDocument: (documentId: string) =>
-    request<DocumentDetail>(`/api/documents/${encodeURIComponent(documentId)}/reindex`, {
-      method: 'POST',
-    }),
+  /** Bring a paper up to date; `force` rebuilds chunks and vectors even if current. */
+  reindexDocument: (documentId: string, force = false) =>
+    request<ReindexResponse>(
+      `/api/documents/${encodeURIComponent(documentId)}/reindex${force ? '?force=true' : ''}`,
+      { method: 'POST' },
+    ),
   listChunks: (documentId: string, offset: number, limit: number, signal?: AbortSignal) =>
     request<ChunkListResponse>(
       `/api/documents/${encodeURIComponent(documentId)}/chunks?offset=${offset}&limit=${limit}`,

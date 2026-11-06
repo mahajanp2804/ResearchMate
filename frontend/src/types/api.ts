@@ -25,6 +25,13 @@ export interface SystemInfo {
   version: string
   environment: string
   embedding_model_name: string
+  embedding_device: string
+  vector_index: {
+    vector_count: number
+    /** Model and dimension of the stored vectors; null until a paper is indexed. */
+    model_name: string | null
+    dimension: number | null
+  }
   max_upload_size_mb: number
   max_files_per_upload: number
   max_pages_per_document: number
@@ -114,6 +121,15 @@ export interface DocumentDetail extends DocumentSummary {
   chunking_signature: string | null
   indexed_at: string | null
   pages_without_text: number[]
+}
+
+/**
+ * What re-indexing did: nothing (`unchanged`), re-embedded existing chunks,
+ * rebuilt chunks and vectors, or failed (see `document.status_message`).
+ */
+export interface ReindexResponse {
+  action: 'unchanged' | 'reembedding' | 'rechunked' | 'failed'
+  document: DocumentDetail
 }
 
 /** A passage the paper was split into; the unit that retrieval returns. */

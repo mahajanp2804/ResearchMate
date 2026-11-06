@@ -1,6 +1,7 @@
 import {
   ChevronDown,
   CircleAlert,
+  DatabaseZap,
   ExternalLink,
   FileText,
   Layers,
@@ -11,6 +12,7 @@ import {
 import { useState } from 'react'
 import { api } from '../services/api'
 import type { DocumentSummary } from '../types/api'
+import { needsIndexing } from '../utils/documents'
 import { cn, formatBytes, formatDate, pluralize } from '../utils/format'
 import { DocumentStatusBadge } from './StatusBadge'
 import { Button } from './ui/Button'
@@ -41,7 +43,9 @@ export function DocumentCard({
   const [expanded, setExpanded] = useState(false)
   const metadata = document.extracted_metadata
   const title = document.title ?? document.filename
-  const failed = document.processing_status === 'failed'
+  const processingFailed = document.processing_status === 'failed'
+  const failed = processingFailed || document.indexing_status === 'failed'
+  const canIndex = needsIndexing(document)
 
   const details: [string, string | undefined][] = [
     ['File name', document.filename],
@@ -90,14 +94,16 @@ export function DocumentCard({
             </p>
           )}
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            {failed && (
+            {(processingFailed || canIndex) && (
               <Button size="sm" onClick={() => onReindex(document)} disabled={reindexing}>
                 {reindexing ? (
                   <Spinner className="text-accent-fg" />
-                ) : (
+                ) : processingFailed ? (
                   <RefreshCw className="size-3.5" aria-hidden />
+                ) : (
+                  <DatabaseZap className="size-3.5" aria-hidden />
                 )}
-                Retry processing
+                {processingFailed ? 'Retry processing' : 'Index now'}
               </Button>
             )}
             {document.chunk_count > 0 && (

@@ -1,4 +1,4 @@
-import { FileText, Search } from 'lucide-react'
+import { DatabaseZap, FileText, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ChunksDialog } from '../components/ChunksDialog'
 import { DocumentCard } from '../components/DocumentCard'
@@ -8,12 +8,12 @@ import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { EmptyState } from '../components/ui/EmptyState'
-import { ErrorState, Skeleton } from '../components/ui/Feedback'
+import { ErrorState, Skeleton, Spinner } from '../components/ui/Feedback'
 import { useApi } from '../hooks/useApi'
 import { isActiveUpload, useUploadQueue } from '../hooks/useUploadQueue'
 import { ApiError, api } from '../services/api'
 import type { DocumentSummary } from '../types/api'
-import { BUSY_POLL_MS, isDocumentBusy } from '../utils/documents'
+import { BUSY_POLL_MS, isDocumentBusy, needsIndexing } from '../utils/documents'
 import { pluralize } from '../utils/format'
 
 // Used until /api/system/info has loaded; the server enforces the real limits.
@@ -42,6 +42,7 @@ export default function Documents() {
   const [pendingDelete, setPendingDelete] = useState<DocumentSummary | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reindexingId, setReindexingId] = useState<string | null>(null)
+  const [indexingAll, setIndexingAll] = useState(false)
   const [viewing, setViewing] = useState<DocumentSummary | null>(null)
   const [actionError, setActionError] = useState<{ title: string; message: string } | null>(null)
 
@@ -77,11 +78,30 @@ export default function Documents() {
       await api.reindexDocument(document.id)
     } catch (error) {
       setActionError({
-        title: 'Re-processing failed',
+        title: 'Re-indexing failed',
         message: error instanceof ApiError ? error.message : 'The paper could not be re-processed.',
       })
     } finally {
       setReindexingId(null)
+      documents.reload()
+    }
+  }
+
+  // Papers whose text is ready but which are not searchable, e.g. after the
+  // embedding model was changed or an indexing run failed.
+  const unindexed = (items ?? []).filter(needsIndexing)
+  const indexAll = async () => {
+    setIndexingAll(true)
+    setActionError(null)
+    try {
+      for (const document of unindexed) await api.reindexDocument(document.id)
+    } catch (error) {
+      setActionError({
+        title: 'Indexing failed',
+        message: error instanceof ApiError ? error.message : 'Some papers could not be indexed.',
+      })
+    } finally {
+      setIndexingAll(false)
       documents.reload()
     }
   }
@@ -127,20 +147,28 @@ export default function Documents() {
             )}
           </h2>
           {items && items.length > 0 && (
-            <label className="relative block sm:w-72">
-              <span className="sr-only">Search papers</span>
-              <Search
-                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle"
-                aria-hidden
-              />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search by title, file or author"
-                className="h-9 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm text-fg shadow-card placeholder:text-fg-subtle focus:border-accent focus:outline-none"
-              />
-            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {unindexed.length >= 2 && (
+                <Button variant="secondary" onClick={indexAll} disabled={indexingAll}>
+                  {indexingAll ? <Spinner /> : <DatabaseZap className="size-4" aria-hidden />}
+                  Index all ({unindexed.length})
+                </Button>
+              )}
+              <label className="relative block sm:w-72">
+                <span className="sr-only">Search papers</span>
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-subtle"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search by title, file or author"
+                  className="h-9 w-full rounded-lg border border-border bg-surface pr-3 pl-9 text-sm text-fg shadow-card placeholder:text-fg-subtle focus:border-accent focus:outline-none"
+                />
+              </label>
+            </div>
           )}
         </div>
 
