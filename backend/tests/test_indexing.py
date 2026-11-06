@@ -256,3 +256,14 @@ def test_restart_removes_orphaned_vectors(tmp_path: Path) -> None:
     restarted = make_app(settings)
     with TestClient(restarted):
         assert vector_ids(restarted) == ids
+
+
+def test_system_info_reports_the_vector_index(client: TestClient, app: FastAPI) -> None:
+    empty = client.get("/api/system/info").json()["vector_index"]
+    assert empty == {"vector_count": 0, "model_name": None, "dimension": None}
+
+    document = upload(client, sample_paper())
+    index = client.get("/api/system/info").json()["vector_index"]
+    assert index["vector_count"] == len(chunk_ids(client, document["id"]))
+    assert index["model_name"] == app.state.settings.embedding_model_name
+    assert index["dimension"] == app.state.test_embedder.dimension

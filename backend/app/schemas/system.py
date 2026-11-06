@@ -38,6 +38,13 @@ class LLMInfo(BaseModel):
     max_output_tokens: int
 
 
+class VectorIndexInfo(BaseModel):
+    vector_count: int
+    # Model and dimension of the stored vectors; null until the first paper is indexed.
+    model_name: str | None
+    dimension: int | None
+
+
 class SystemInfo(BaseModel):
     """Non-secret runtime configuration shown on the Settings page."""
 
@@ -45,6 +52,8 @@ class SystemInfo(BaseModel):
     version: str
     environment: str
     embedding_model_name: str
+    embedding_device: str
+    vector_index: VectorIndexInfo
     max_upload_size_mb: int
     max_files_per_upload: int
     max_pages_per_document: int

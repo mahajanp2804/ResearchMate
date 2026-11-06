@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.dependencies import DbSession, SettingsDep
+from app.dependencies import DbSession, IngestionDep, SettingsDep
 from app.schemas.system import (
     ChunkingInfo,
     DashboardStats,
@@ -10,6 +10,7 @@ from app.schemas.system import (
     LLMInfo,
     RetrievalInfo,
     SystemInfo,
+    VectorIndexInfo,
 )
 from app.services import stats_service
 from app.utils.logging import get_logger
@@ -37,14 +38,21 @@ def health(db: DbSession, settings: SettingsDep) -> HealthResponse:
 
 
 @router.get("/system/info", response_model=SystemInfo)
-def system_info(settings: SettingsDep) -> SystemInfo:
+def system_info(settings: SettingsDep, ingestion: IngestionDep) -> SystemInfo:
     # Built field by field on purpose: dumping Settings wholesale would risk
     # sending secrets or local filesystem paths to the browser.
+    store = ingestion.vector_store
     return SystemInfo(
         app_name=settings.app_name,
         version=settings.app_version,
         environment=settings.environment,
         embedding_model_name=settings.embedding_model_name,
+        embedding_device=settings.embedding_device,
+        vector_index=VectorIndexInfo(
+            vector_count=store.vector_count,
+            model_name=store.model_name,
+            dimension=store.dimension,
+        ),
         max_upload_size_mb=settings.max_upload_size_mb,
         max_files_per_upload=settings.max_files_per_upload,
         max_pages_per_document=settings.max_pages_per_document,
