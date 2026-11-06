@@ -23,6 +23,8 @@ EDGE_LINES_CHECKED = 2
 # A line must repeat at a page edge on at least this share of pages to be dropped.
 REPEATED_EDGE_LINE_SHARE = 0.5
 MIN_PAGES_FOR_REPEAT_DETECTION = 3
+# Pages need this many non-empty lines before their top/bottom lines count as edges.
+MIN_LINES_FOR_EDGE_DETECTION = 2 * EDGE_LINES_CHECKED + 2
 
 _NAMED_SECTIONS = {
     "abstract",
@@ -118,25 +120,34 @@ def _edge_indices(lines: list[str]) -> list[int]:
     return non_empty[:EDGE_LINES_CHECKED] + non_empty[-EDGE_LINES_CHECKED:]
 
 
+def _has_distinct_edges(lines: list[str]) -> bool:
+    # On a very short page the "edge" lines are the body itself, so repeated
+    # wording there must not be mistaken for a running header.
+    return sum(1 for line in lines if line.strip()) >= MIN_LINES_FOR_EDGE_DETECTION
+
+
 def remove_headers_and_footers(pages_lines: list[list[str]]) -> list[list[str]]:
     """Drop running headers/footers and page numbers from the edges of each page."""
+    eligible = [lines for lines in pages_lines if _has_distinct_edges(lines)]
     repeated: set[str] = set()
-    if len(pages_lines) >= MIN_PAGES_FOR_REPEAT_DETECTION:
+    if len(eligible) >= MIN_PAGES_FOR_REPEAT_DETECTION:
         counts: Counter[str] = Counter()
-        for lines in pages_lines:
+        for lines in eligible:
             counts.update({_edge_key(lines[index]) for index in _edge_indices(lines)})
         threshold = max(
             MIN_PAGES_FOR_REPEAT_DETECTION,
-            math.ceil(REPEATED_EDGE_LINE_SHARE * len(pages_lines)),
+            math.ceil(REPEATED_EDGE_LINE_SHARE * len(eligible)),
         )
         repeated = {key for key, count in counts.items() if count >= threshold}
 
     cleaned = []
     for lines in pages_lines:
+        check_repeats = _has_distinct_edges(lines)
         drop = {
             index
             for index in _edge_indices(lines)
-            if _edge_key(lines[index]) in repeated or _PAGE_NUMBER_LINE.match(lines[index].strip())
+            if _PAGE_NUMBER_LINE.match(lines[index].strip())
+            or (check_repeats and _edge_key(lines[index]) in repeated)
         }
         cleaned.append([line for index, line in enumerate(lines) if index not in drop])
     return cleaned

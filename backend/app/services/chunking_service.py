@@ -23,7 +23,7 @@ from app.utils.logging import get_logger
 logger = get_logger(__name__)
 
 # Bump when the algorithm changes so stored chunks are known to be outdated.
-CHUNKER_VERSION = 1
+CHUNKER_VERSION = 2
 # A heading closes the current chunk only if it already holds this share of
 # the chunk size; otherwise a short section is merged into the next one.
 SECTION_BREAK_MIN_FILL = 0.2

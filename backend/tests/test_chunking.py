@@ -187,4 +187,4 @@ def test_sentence_splitting_handles_abbreviations(text: str, expected) -> None:
 
 
 def test_signature_identifies_tokenizer_and_settings() -> None:
-    assert chunking_signature("tok", 250, 50) == "v1:tok:250/50"
+    assert chunking_signature("tok", 250, 50) == "v2:tok:250/50"

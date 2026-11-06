@@ -220,7 +220,7 @@ def test_upload_splits_paper_into_chunks(client: TestClient) -> None:
     assert document["chunk_count"] > 0
 
     detail = client.get(f"/api/documents/{document['id']}").json()
-    assert detail["chunking_signature"] == "v1:test-whitespace:250/50"
+    assert detail["chunking_signature"] == "v2:test-whitespace:250/50"
 
 
 def test_chunks_endpoint_lists_passages_in_order_with_pages(client: TestClient) -> None:

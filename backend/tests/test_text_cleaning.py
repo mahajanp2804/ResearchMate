@@ -57,11 +57,11 @@ def test_rejects_non_headings(line: str) -> None:
 
 
 BODY = [
-    ["Clients train locally.", "Updates are averaged.", "The server broadcasts."],
-    ["Data is non-IID.", "Drift slows convergence.", "A proximal term helps."],
-    ["We use MNIST.", "Models are small CNNs.", "Training runs on CPUs."],
-    ["Accuracy improves.", "Communication drops.", "Variance is reduced."],
-    ["Limitations remain.", "Privacy is not proven.", "Future work follows."],
+    ["Clients train locally.", "Updates are averaged.", "The server broadcasts.", "Repeat."],
+    ["Data is non-IID.", "Drift slows convergence.", "A proximal term helps.", "It works."],
+    ["We use MNIST.", "Models are small CNNs.", "Training runs on CPUs.", "Seeds vary."],
+    ["Accuracy improves.", "Communication drops.", "Variance is reduced.", "See Table 2."],
+    ["Limitations remain.", "Privacy is not proven.", "Future work follows.", "We conclude."],
 ]
 
 
@@ -76,6 +76,16 @@ def test_removes_running_headers_footers_and_page_numbers() -> None:
         assert "Journal of Federated Learning, Vol. 3" not in lines
         assert f"Page {number}" not in lines
         assert lines == body
+
+
+def test_short_pages_keep_repeated_body_lines() -> None:
+    # On a four-line page every line is an "edge", so identical wording across
+    # pages is body text, not a running header.
+    repeated = "Federated learning trains a shared model across many clients."
+    pages = [
+        [f"Page {n} introduces topic {n}.", repeated, "Results follow.", "End."] for n in "ABCD"
+    ]
+    assert remove_headers_and_footers(pages) == pages
 
 
 def test_lone_page_numbers_are_removed_even_without_repetition() -> None:
