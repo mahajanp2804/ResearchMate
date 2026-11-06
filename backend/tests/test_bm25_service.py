@@ -130,5 +130,14 @@ def test_status_change_rebuilds_the_index(db_session, papers, service) -> None:
     assert service.search(db_session, "bread", 5) == []
 
 
+def test_terms_in_most_chunks_still_score_in_a_small_library(db_session, service) -> None:
+    # Okapi IDF is log(1) = 0 for a term in one of two chunks, and negative for
+    # a term in both; the Lucene variant keeps both positive.
+    add_paper(db_session, "tiny", ["Client drift slows training.", "Client drift is corrected."])
+    hits = service.search(db_session, "client drift", 5)
+    assert len(hits) == 2
+    assert all(hit.score > 0 for hit in hits)
+
+
 def test_empty_corpus(db_session, service) -> None:
     assert service.search(db_session, "anything at all", 5) == []

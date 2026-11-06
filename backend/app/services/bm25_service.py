@@ -9,6 +9,7 @@ chunks changes. Change detection uses a cheap aggregate over chunk ids,
 which is reliable because SQLite never reuses chunk ids (AUTOINCREMENT).
 """
 
+import math
 import re
 import threading
 import time
@@ -80,6 +81,23 @@ def analyze(text: str) -> list[str]:
     return terms
 
 
+class LuceneIdfBM25(BM25Okapi):
+    """BM25Okapi with the always-positive IDF used by Lucene and Elasticsearch.
+
+    Okapi's IDF, log((N - n + 0.5) / (n + 0.5)), is zero or negative once a term
+    appears in half the chunks. In a small library (a couple of short papers)
+    that makes relevant terms such as "drift" score nothing. log(1 + ...) keeps
+    every matching term positive and still ranks rare terms above common ones.
+    """
+
+    def _calc_idf(self, nd: dict[str, int]) -> None:
+        for word, document_frequency in nd.items():
+            self.idf[word] = math.log(
+                1 + (self.corpus_size - document_frequency + 0.5) / (document_frequency + 0.5)
+            )
+        self.average_idf = sum(self.idf.values()) / len(self.idf) if self.idf else 0.0
+
+
 @dataclass(frozen=True)
 class KeywordHit:
     chunk_id: int
@@ -91,7 +109,7 @@ class _Snapshot:
     fingerprint: tuple[int, int, int]
     chunk_ids: np.ndarray  # int64, aligned with the BM25 corpus
     document_ids: np.ndarray  # str, aligned with the BM25 corpus
-    bm25: BM25Okapi | None  # None when there is nothing to search
+    bm25: LuceneIdfBM25 | None  # None when there is nothing to search
 
 
 def _searchable_chunks():
@@ -140,7 +158,7 @@ class BM25Service:
                 fingerprint=fingerprint,
                 chunk_ids=np.array([row[0] for row in rows], dtype=np.int64),
                 document_ids=np.array([row[1] for row in rows], dtype=object),
-                bm25=BM25Okapi(corpus, k1=self._k1, b=self._b) if has_terms else None,
+                bm25=LuceneIdfBM25(corpus, k1=self._k1, b=self._b) if has_terms else None,
             )
             logger.info(
                 "Built BM25 index over %d chunks in %.0f ms",
