@@ -22,6 +22,7 @@ def configure_logging(level: str = "INFO") -> None:
     for noisy in (
         "uvicorn.access",
         "httpx",
+        "httpx2",
         "httpcore",
         "urllib3",
         "sentence_transformers",
