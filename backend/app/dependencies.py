@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.database import Database
 from app.services.ingestion_service import IngestionService
+from app.services.retrieval_service import RetrievalService
 
 
 def get_app_settings(request: Request) -> Settings:
@@ -17,6 +18,10 @@ def get_app_settings(request: Request) -> Settings:
 
 def get_ingestion(request: Request) -> IngestionService:
     return request.app.state.ingestion
+
+
+def get_retrieval(request: Request) -> RetrievalService:
+    return request.app.state.retrieval
 
 
 def get_database(request: Request) -> Database:
@@ -38,3 +43,4 @@ SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
 DbSession = Annotated[Session, Depends(get_db)]
 IngestionDep = Annotated[IngestionService, Depends(get_ingestion)]
+RetrievalDep = Annotated[RetrievalService, Depends(get_retrieval)]

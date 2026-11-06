@@ -20,8 +20,10 @@ from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
 from app.routers import documents, system
+from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
 from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
+from app.services.retrieval_service import RetrievalService
 from app.services.tokenization import get_huggingface_tokenizer
 from app.services.vector_store import VectorStore
 from app.utils.logging import configure_logging, get_logger
@@ -125,6 +127,9 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.ingestion = ingestion
+    app.state.retrieval = RetrievalService(
+        ingestion, BM25Service(k1=settings.bm25_k1, b=settings.bm25_b)
+    )
 
     app.add_middleware(
         CORSMiddleware,

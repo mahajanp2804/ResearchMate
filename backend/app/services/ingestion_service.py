@@ -200,7 +200,8 @@ class IngestionService:
 
     # --- Embedding and indexing (background) -------------------------------
 
-    def _load_embedder(self, db: Session) -> Embedder:
+    def load_embedder(self, db: Session) -> Embedder:
+        """Load the embedding model and make sure the vector index matches it."""
         embedder = self._embedder_provider()
         if not self._checked_chunk_size:
             warn_if_chunks_exceed_model(embedder, self.settings.chunk_size_tokens)
@@ -228,7 +229,7 @@ class IngestionService:
             document.indexing_status = IndexingStatus.INDEXING
             db.commit()
             try:
-                embedder = self._load_embedder(db)
+                embedder = self.load_embedder(db)
                 chunks = list(
                     db.scalars(
                         select(Chunk)
