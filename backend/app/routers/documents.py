@@ -1,9 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.dependencies import DbSession, SettingsDep, TokenizerProviderDep
+from app.dependencies import DbSession, IngestionDep, SettingsDep
 from app.exceptions import InvalidInputError
 from app.schemas.common import ErrorDetail
 from app.schemas.document import (
@@ -15,7 +15,7 @@ from app.schemas.document import (
     UploadResponse,
     UploadResult,
 )
-from app.services import document_service, ingestion_service
+from app.services import document_service
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -31,13 +31,16 @@ def upload_documents(
     files: Annotated[list[UploadFile], File(description="One or more PDF files")],
     db: DbSession,
     settings: SettingsDep,
-    tokenizer_provider: TokenizerProviderDep,
+    ingestion: IngestionDep,
+    background_tasks: BackgroundTasks,
     response: Response,
 ) -> UploadResponse:
     """Upload PDFs. Each file gets its own result: created, duplicate or rejected.
 
-    New papers are extracted and split into chunks during the request.
-    Returns 201 when at least one new document was stored, otherwise 200.
+    New papers are extracted and split into chunks during the request, then
+    embedded and indexed in the background (``indexing_status`` moves from
+    ``indexing`` to ``indexed``). Returns 201 when at least one new document
+    was stored, otherwise 200.
     """
     if len(files) > settings.max_files_per_upload:
         raise InvalidInputError(
@@ -48,8 +51,10 @@ def upload_documents(
     results: list[UploadResult] = []
     for upload in files:
         outcome = document_service.ingest_upload(
-            db, settings, tokenizer_provider, upload.filename, upload.file
+            db, settings, ingestion, upload.filename, upload.file
         )
+        if outcome.needs_indexing and outcome.document is not None:
+            background_tasks.add_task(ingestion.index_document, outcome.document.id)
         results.append(
             UploadResult(
                 filename=outcome.filename,
@@ -100,16 +105,17 @@ def get_document(document_id: str, db: DbSession) -> DocumentDetail:
 def reindex_document(
     document_id: str,
     db: DbSession,
-    settings: SettingsDep,
-    tokenizer_provider: TokenizerProviderDep,
+    ingestion: IngestionDep,
+    background_tasks: BackgroundTasks,
 ) -> DocumentDetail:
-    """Rebuild a paper's chunks from its stored page text with the current settings.
+    """Rebuild a paper's chunks from its stored page text and re-embed them.
 
     Also the retry path for a paper whose processing failed. A failure is
     reported in the returned ``processing_status`` and ``status_message``.
     """
     document = document_service.get_document(db, document_id)
-    ingestion_service.reindex_document(db, settings, document, tokenizer_provider)
+    if ingestion.reindex(db, document):
+        background_tasks.add_task(ingestion.index_document, document.id)
     return DocumentDetail.model_validate(document)
 
 
@@ -144,6 +150,8 @@ def get_document_file(document_id: str, db: DbSession, settings: SettingsDep) ->
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_document(document_id: str, db: DbSession, settings: SettingsDep) -> Response:
-    document_service.delete_document(db, settings, document_id)
+def delete_document(
+    document_id: str, db: DbSession, settings: SettingsDep, ingestion: IngestionDep
+) -> Response:
+    document_service.delete_document(db, settings, ingestion, document_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

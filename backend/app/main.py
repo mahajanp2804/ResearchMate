@@ -20,8 +20,10 @@ from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
 from app.routers import documents, system
-from app.services.ingestion_service import TokenizerProvider
+from app.services.embedding_service import get_sentence_transformer_embedder
+from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
 from app.services.tokenization import get_huggingface_tokenizer
+from app.services.vector_store import VectorStore
 from app.utils.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -69,18 +71,39 @@ def create_app(
     settings: Settings | None = None,
     *,
     tokenizer_provider: TokenizerProvider | None = None,
+    embedder_provider: EmbedderProvider | None = None,
 ) -> FastAPI:
     """Build the application.
 
-    ``tokenizer_provider`` lets tests swap in a deterministic tokenizer; by
-    default the embedding model's tokenizer is loaded on first use.
+    The providers let tests swap in deterministic fakes. By default the
+    embedding model and its tokenizer are loaded on first use, so the API
+    starts quickly and only pays the model-loading cost when it is needed.
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
     database = Database(settings.database_url)
     if tokenizer_provider is None:
-        model_name = settings.embedding_model_name
-        tokenizer_provider = lambda: get_huggingface_tokenizer(model_name)  # noqa: E731
+
+        def tokenizer_provider():
+            return get_huggingface_tokenizer(settings.embedding_model_name)
+
+    if embedder_provider is None:
+
+        def embedder_provider():
+            return get_sentence_transformer_embedder(
+                settings.embedding_model_name,
+                device=settings.embedding_device,
+                batch_size=settings.embedding_batch_size,
+                query_prefix=settings.embedding_query_prefix,
+            )
+
+    ingestion = IngestionService(
+        settings=settings,
+        database=database,
+        vector_store=VectorStore(settings.index_dir),
+        tokenizer_provider=tokenizer_provider,
+        embedder_provider=embedder_provider,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -100,7 +123,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.database = database
-    app.state.tokenizer_provider = tokenizer_provider
+    app.state.ingestion = ingestion
 
     app.add_middleware(
         CORSMiddleware,

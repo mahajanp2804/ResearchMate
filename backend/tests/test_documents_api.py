@@ -34,7 +34,8 @@ def test_upload_creates_document_with_pages(client: TestClient, app: FastAPI) ->
     assert document["filename"] == "fedavg.pdf"
     assert document["page_count"] == 3
     assert document["processing_status"] == "completed"
-    assert document["indexing_status"] == "not_indexed"
+    # Embedding runs in the background after the response is sent.
+    assert document["indexing_status"] == "indexing"
     assert document["status_message"] is None
 
     stored = app.state.settings.upload_dir / f"{document['id']}.pdf"

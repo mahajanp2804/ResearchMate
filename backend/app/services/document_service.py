@@ -14,7 +14,7 @@ from app.models import ActivityType, Chunk, Document, DocumentPage, ProcessingSt
 from app.models.base import new_id
 from app.services import ingestion_service, pdf_service
 from app.services.activity_service import record_activity
-from app.services.ingestion_service import TokenizerProvider
+from app.services.ingestion_service import IngestionService
 from app.utils.file_validation import (
     has_pdf_extension,
     looks_like_pdf,
@@ -34,12 +34,14 @@ class UploadOutcome:
     status: UploadStatus
     document: Document | None = None
     error: ResearchMateError | None = None
+    # True when the caller should schedule background indexing.
+    needs_indexing: bool = False
 
 
 def ingest_upload(
     db: Session,
     settings: Settings,
-    tokenizer_provider: TokenizerProvider,
+    ingestion: IngestionService,
     raw_filename: str | None,
     stream: BinaryIO,
 ) -> UploadOutcome:
@@ -58,7 +60,7 @@ def ingest_upload(
         return UploadOutcome(filename=filename, status="rejected", error=error)
 
     if outcome.status == "created" and outcome.document is not None:
-        ingestion_service.process_document(db, settings, outcome.document, tokenizer_provider)
+        outcome.needs_indexing = ingestion.process(db, outcome.document)
     return outcome
 
 
@@ -189,18 +191,23 @@ def get_document_file(db: Session, settings: Settings, document_id: str) -> tupl
     return document, path
 
 
-def delete_document(db: Session, settings: Settings, document_id: str) -> None:
-    """Delete a document, its pages and chunks (via cascade) and its stored file."""
+def delete_document(
+    db: Session, settings: Settings, ingestion: IngestionService, document_id: str
+) -> None:
+    """Delete a document, its pages and chunks (via cascade), its vectors and its file."""
     document = get_document(db, document_id)
     path = settings.upload_dir / document.stored_path
     title = document.title or document.filename
+    chunk_ids = ingestion.chunk_ids(db, document_id)
 
     db.delete(document)
     record_activity(db, ActivityType.DOCUMENT_DELETED, f"Deleted “{title}”")
     db.commit()
 
-    # The file is removed after the commit: a leftover file is harmless,
-    # whereas a database row pointing at a missing file is not.
+    # Vectors and the file are removed after the commit. If either step
+    # failed, the leftovers would be harmless: vectors without a chunk row are
+    # never returned and are cleaned up at the next startup.
+    ingestion.remove_vectors(chunk_ids)
     try:
         path.unlink(missing_ok=True)
     except OSError:
