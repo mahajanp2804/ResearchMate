@@ -56,7 +56,10 @@ acceptance criteria each phase must meet before the next one starts.
 | Persistence | SQLAlchemy 2.0 ORM, portable column types, string enums (no native DB enums) | Swapping `DATABASE_URL` to PostgreSQL needs no model changes. |
 | Background work | FastAPI background tasks + status columns polled by the UI | Uploads return immediately; no Celery/Redis needed for a single-user local app. |
 | Startup consistency | On start, interrupted work is reset, papers whose vectors are missing or from another model are marked not indexed, and orphaned vectors are removed | Statuses always describe what is really in the index, even after a crash. |
-| PyTorch + FAISS on macOS | Load torch before faiss, keep FAISS single-threaded, allow the second OpenMP runtime (`KMP_DUPLICATE_LIB_OK`) | Both macOS wheels bundle their own OpenMP; any other combination segfaults. A test checks FAISS results against NumPy in a subprocess. |
+| PyTorch + FAISS on macOS | Load torch before faiss, allow the second OpenMP runtime (`KMP_DUPLICATE_LIB_OK`), and set FAISS to one thread **in every calling thread** | Both macOS wheels bundle their own OpenMP; any other combination segfaults or deadlocks. `omp_set_num_threads` is per-thread and FastAPI uses worker threads, so it is applied before every FAISS call. A subprocess test runs embedding and search on worker threads and checks results against NumPy. |
+| BM25 IDF | Lucene's `log(1 + (N − n + 0.5)/(n + 0.5))` instead of Okapi's | Okapi IDF is zero or negative for terms in half the chunks, which in a small library drops relevant passages. |
+| BM25 cache | In-memory index rebuilt only when `(count, sum, max)` of searchable chunk ids changes | Stateless invalidation with no hooks on every write; reliable because chunk ids are never reused. |
+| What is searchable | Only papers with `indexing_status = indexed`, for both retrievers | "Searchable" in the UI means exactly what search uses; a half-indexed paper never appears in one method but not the other. |
 
 ### Decision (Phase 3): chunk size vs. embedding window
 
@@ -90,14 +93,14 @@ ResearchMate/
 │   │   ├── models/               # SQLAlchemy ORM
 │   │   │   ├── document.py  page.py  chunk.py  conversation.py  evaluation.py  activity.py
 │   │   ├── schemas/              # Pydantic API contracts
-│   │   │   ├── common.py  system.py  document.py  chat.py  research.py  evaluation.py
+│   │   │   ├── common.py  system.py  document.py  retrieval.py  chat.py  research.py  evaluation.py
 │   │   ├── routers/
-│   │   │   ├── system.py  documents.py  chat.py  research.py  comparison.py  evaluation.py
+│   │   │   ├── system.py  documents.py  retrieval.py  chat.py  research.py  comparison.py  evaluation.py
 │   │   ├── services/
 │   │   │   ├── document_service.py    # upload, de-duplication, listing, deletion
 │   │   │   ├── ingestion_service.py   # chunk → embed → index for stored documents
 │   │   │   ├── pdf_service.py  text_cleaning.py  chunking_service.py  tokenization.py
-│   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py
+│   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py  retrieval_service.py
 │   │   │   ├── hybrid_retriever.py  reranker.py  rag_pipeline.py
 │   │   │   ├── llm_service.py  citation_service.py
 │   │   │   ├── summarization_service.py  comparison_service.py  research_gap_service.py
@@ -199,6 +202,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 - BM25 (rank-bm25) built from SQLite chunks, cached and invalidated when the corpus changes, same filters.
 - Debug endpoint `POST /api/retrieval/search` returning ranked chunks per method.
 - **Done when:** tests show keyword-only and paraphrase-only queries each retrieve the right chunk, and filters exclude other documents.
+- **Status: done.** With the real model, a paraphrase sharing no keywords is found only by dense retrieval (BM25 returns nothing) and a rare identifier is matched exactly by BM25 (`tests/test_retrieval_models.py`). The RAG Evaluation page has a retrieval playground showing both side by side.
 
 ### Phase 6 — Hybrid fusion & reranking
 - RRF fusion, cross-encoder rerank of the top-N fused candidates, context selection (overlap de-duplication, token budget, minimum-evidence threshold).
