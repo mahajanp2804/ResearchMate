@@ -6,6 +6,8 @@ import type {
   DocumentListResponse,
   HealthResponse,
   ReindexResponse,
+  SearchRequest,
+  SearchResponse,
   SystemInfo,
   UploadResponse,
 } from '../types/api'
@@ -127,6 +129,14 @@ export const api = {
       { signal },
     ),
   uploadDocument,
+  /** Run dense and/or BM25 retrieval and get each method's ranked passages. */
+  search: (body: SearchRequest, signal?: AbortSignal) =>
+    request<SearchResponse>('/api/retrieval/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }),
   /** URL of the original PDF, optionally opened at a 1-based page. */
   documentFileUrl: (documentId: string, page?: number) =>
     `${API_BASE_URL}/api/documents/${encodeURIComponent(documentId)}/file${page ? `#page=${page}` : ''}`,

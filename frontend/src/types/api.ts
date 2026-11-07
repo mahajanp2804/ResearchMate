@@ -181,3 +181,42 @@ export interface ApiErrorBody {
     details?: Record<string, unknown>
   }
 }
+
+// --- Retrieval ---------------------------------------------------------------
+
+export type SearchMethod = 'dense' | 'bm25'
+
+export interface SearchRequest {
+  query: string
+  methods?: SearchMethod[]
+  top_k?: number
+  /** Omit or null to search every searchable paper. */
+  document_ids?: string[] | null
+}
+
+export interface SearchHit {
+  rank: number
+  /** Cosine similarity (dense) or BM25 score; only comparable within one method. */
+  score: number
+  chunk_id: number
+  document_id: string
+  document_title: string
+  chunk_index: number
+  page_start: number
+  page_end: number
+  section: string | null
+  text: string
+}
+
+export interface MethodResults {
+  method: SearchMethod
+  hits: SearchHit[]
+  latency_ms: number
+}
+
+export interface SearchResponse {
+  query: string
+  results: MethodResults[]
+  searched_document_count: number
+  skipped_document_ids: string[]
+}
