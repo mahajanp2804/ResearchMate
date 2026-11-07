@@ -16,7 +16,8 @@ import json
 import os
 import sys
 import threading
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -40,8 +41,20 @@ from app.utils.logging import get_logger  # noqa: E402
 
 logger = get_logger(__name__)
 
-# Exact search over tens of thousands of vectors is still fast on one thread.
-faiss.omp_set_num_threads(1)
+
+def _single_threaded_faiss() -> None:
+    """Rule 3 above, applied in the calling thread.
+
+    omp_set_num_threads only affects the thread that calls it, and FastAPI
+    runs requests and background tasks on worker threads, so it is set before
+    every FAISS operation. Without it, a search on a worker thread starts a
+    second OpenMP thread pool and hangs or segfaults. Exact search over tens
+    of thousands of vectors is still fast on one thread.
+    """
+    faiss.omp_set_num_threads(1)
+
+
+_single_threaded_faiss()
 
 INDEX_FILENAME = "chunks.faiss"
 MANIFEST_FILENAME = "manifest.json"
@@ -62,6 +75,12 @@ class VectorStore:
         self.dimension: int | None = None
         self._load()
 
+    @contextmanager
+    def _locked(self) -> Iterator[None]:
+        with self._lock:
+            _single_threaded_faiss()
+            yield
+
     @property
     def index_path(self) -> Path:
         return self._dir / INDEX_FILENAME
@@ -73,6 +92,7 @@ class VectorStore:
     # --- Loading and saving ------------------------------------------------
 
     def _load(self) -> None:
+        _single_threaded_faiss()
         if not (self.index_path.is_file() and self.manifest_path.is_file()):
             return
         try:
@@ -112,11 +132,11 @@ class VectorStore:
 
     @property
     def vector_count(self) -> int:
-        with self._lock:
+        with self._locked():
             return int(self._index.ntotal) if self._index is not None else 0
 
     def ids(self) -> set[int]:
-        with self._lock:
+        with self._locked():
             if self._index is None or self._index.ntotal == 0:
                 return set()
             return {int(value) for value in faiss.vector_to_array(self._index.id_map)}
@@ -129,7 +149,7 @@ class VectorStore:
         Returns True if existing vectors were discarded because a different
         model (or dimension) produced them.
         """
-        with self._lock:
+        with self._locked():
             if (
                 self._index is not None
                 and self.model_name == model_name
@@ -152,7 +172,7 @@ class VectorStore:
 
     def add(self, ids: Sequence[int], vectors: np.ndarray) -> None:
         """Insert vectors, replacing any already stored under the same ids."""
-        with self._lock:
+        with self._locked():
             if self._index is None or self.dimension is None:
                 raise RuntimeError("Call ensure_model() before adding vectors")
             if len(ids) == 0:
@@ -168,7 +188,7 @@ class VectorStore:
 
     def remove(self, ids: Collection[int]) -> int:
         """Delete vectors by chunk id; unknown ids are ignored. Returns how many were removed."""
-        with self._lock:
+        with self._locked():
             if self._index is None or not ids:
                 return 0
             removed = int(self._index.remove_ids(np.asarray(list(ids), dtype=np.int64)))
@@ -186,7 +206,7 @@ class VectorStore:
         ``allowed_ids`` restricts the search inside FAISS itself, so chunks from
         papers outside the user's selection are never candidates at all.
         """
-        with self._lock:
+        with self._locked():
             if self._index is None or self._index.ntotal == 0 or k <= 0:
                 return []
             params = None

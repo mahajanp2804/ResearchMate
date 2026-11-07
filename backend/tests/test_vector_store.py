@@ -111,10 +111,12 @@ def test_add_requires_a_model(tmp_path: Path) -> None:
 @pytest.mark.models
 def test_pytorch_and_faiss_work_together_in_one_process() -> None:
     # On macOS the two libraries ship separate OpenMP runtimes; the wrong setup
-    # segfaults or could return wrong results. Run in a subprocess so a crash
-    # fails this test instead of killing the test session, and compare FAISS
-    # with NumPy's exact scores to rule out silently incorrect results.
+    # segfaults, hangs, or could return wrong results. Run in a subprocess so a
+    # crash or hang fails this test instead of the test session, compare FAISS
+    # with NumPy's exact scores, and repeat the work on worker threads the way
+    # FastAPI runs requests and background tasks.
     script = """
+from concurrent.futures import ThreadPoolExecutor
 from app.services.vector_store import VectorStore
 from app.services.embedding_service import get_sentence_transformer_embedder
 import pathlib, tempfile
@@ -124,23 +126,32 @@ embedder = get_sentence_transformer_embedder(
 rng = np.random.default_rng(0)
 words = ["federated", "clients", "server", "gradient", "privacy", "drift", "proximal"]
 texts = [" ".join(rng.choice(words, 12)) for _ in range(300)]
-for _ in range(2):  # embed -> search -> embed again exercises both runtimes
+
+def round_trip():  # embed -> index -> search, checked against NumPy
     vectors = embedder.embed_documents(texts)
     store = VectorStore(pathlib.Path(tempfile.mkdtemp()))
     store.ensure_model(embedder.name, embedder.dimension)
     store.add(list(range(len(texts))), vectors)
     for row in range(0, 300, 37):
-        hits = store.search(vectors[row], 5)
+        hits = store.search(embedder.embed_query(texts[row]), 5)
         exact = np.sort(vectors @ vectors[row])[::-1][:5]
-        assert np.allclose([hit.score for hit in hits], exact, atol=1e-5)
+        assert np.allclose([hit.score for hit in hits], exact, atol=1e-4)
+    return True
+
+assert round_trip()  # main thread
+with ThreadPoolExecutor(max_workers=3) as pool:  # worker threads, concurrently
+    assert all(future.result() for future in [pool.submit(round_trip) for _ in range(4)])
 print("ok")
 """
-    result = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=BACKEND_DIR,
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=BACKEND_DIR,
+            capture_output=True,
+            text=True,
+            timeout=240,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("PyTorch + FAISS hung (OpenMP deadlock)")
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.strip().endswith("ok")
