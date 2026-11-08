@@ -67,3 +67,33 @@ def unavailable_embedder():
         "Could not load the embedding model (simulated outage).",
         code="embedding_model_unavailable",
     )
+
+
+class OverlapReranker:
+    """Scores a passage by the share of query terms it contains.
+
+    Mapped onto roughly the cross-encoder's logit range: about -11 for an
+    unrelated passage up to +9 when every query term appears, so the default
+    evidence threshold (-10) behaves realistically in tests.
+    """
+
+    name = "test-overlap"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        self.calls.append((query, len(passages)))
+        query_terms = set(_TERM.findall(query.lower()))
+        scores = []
+        for passage in passages:
+            shared = query_terms & set(_TERM.findall(passage.lower()))
+            fraction = len(shared) / len(query_terms) if query_terms else 0.0
+            scores.append(-11.0 + 20.0 * fraction)
+        return scores
+
+
+def unavailable_reranker():
+    raise ServiceUnavailableError(
+        "Could not load the reranking model (simulated outage).", code="reranker_unavailable"
+    )
