@@ -65,11 +65,20 @@ class Settings(BaseSettings):
     # 1.5 and 0.75 are the standard Okapi defaults.
     bm25_k1: float = Field(default=1.5, gt=0)
     bm25_b: float = Field(default=0.75, ge=0, le=1)
+    # Reciprocal Rank Fusion constant: larger values flatten the advantage of top ranks.
     rrf_k: int = Field(default=60, gt=0)
+    # Whether the answer pipeline reranks; the search API can always compare both.
     reranker_enabled: bool = True
     reranker_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # How many fused candidates the cross-encoder scores (cost grows linearly).
     rerank_candidates: int = Field(default=20, gt=0)
-    final_context_chunks: int = Field(default=6, gt=0)
+    # Evidence gate on the cross-encoder's raw score (logit). The MS MARCO model
+    # ranks research passages well but scores them low in absolute terms (correct
+    # passages measured -9 to +9, unrelated text about -11), so the gate sits just
+    # above that noise floor and mainly filters text with nothing to do with the
+    # question. Tuned against unanswerable questions in the Phase 11 evaluation.
+    min_rerank_score: float = -10.0
+    final_context_chunks: int = Field(default=8, gt=0)
     max_context_tokens: int = Field(default=6000, gt=0)
 
     # --- LLM ---------------------------------------------------------------
