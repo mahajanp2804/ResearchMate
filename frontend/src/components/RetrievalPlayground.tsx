@@ -13,27 +13,55 @@ import { Card, CardHeader } from './ui/Card'
 import { EmptyState } from './ui/EmptyState'
 import { ErrorState, Skeleton, Spinner } from './ui/Feedback'
 
-const METHODS: Record<SearchMethod, { label: string; description: string; empty: string }> = {
+interface MethodInfo {
+  label: string
+  description: string
+  empty: string
+  scoreLabel: string
+  digits: number
+}
+
+const METHODS: Record<SearchMethod, MethodInfo> = {
   dense: {
     label: 'Dense · semantic',
     description: 'Embeddings + FAISS cosine similarity. Finds paraphrases and related ideas.',
     empty: 'No passages found.',
+    scoreLabel: 'Cosine similarity',
+    digits: 3,
   },
   bm25: {
     label: 'BM25 · keyword',
     description: 'Exact term matching. Finds names, acronyms, datasets and numbers.',
     empty: 'No passage shares a word with the query, so BM25 has nothing to rank.',
+    scoreLabel: 'BM25 score',
+    digits: 2,
   },
   hybrid: {
     label: 'Hybrid · RRF',
     description: 'Dense and BM25 lists fused by rank (Reciprocal Rank Fusion).',
     empty: 'Neither retriever found a passage.',
+    scoreLabel: 'RRF score: sum of 1/(60 + rank) over the lists that found it',
+    digits: 4,
   },
   hybrid_rerank: {
     label: 'Hybrid + rerank',
-    description: 'Fused candidates rescored by a cross-encoder reading question and passage together.',
+    description:
+      'Fused candidates rescored by a cross-encoder reading question and passage together. This is what the answer pipeline uses.',
     empty: 'Neither retriever found a passage.',
+    scoreLabel: 'Cross-encoder score (logit): higher is more relevant',
+    digits: 2,
   },
+}
+
+const ALL_METHODS: SearchMethod[] = ['dense', 'bm25', 'hybrid', 'hybrid_rerank']
+
+/** "dense #3 · BM25 #1 · was #5 before rerank" for fused and reranked hits. */
+function provenance(hit: SearchHit): string | null {
+  const parts: string[] = []
+  if (hit.source_ranks.dense) parts.push(`dense #${hit.source_ranks.dense}`)
+  if (hit.source_ranks.bm25) parts.push(`BM25 #${hit.source_ranks.bm25}`)
+  if (hit.source_ranks.hybrid) parts.push(`was #${hit.source_ranks.hybrid} before rerank`)
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 const EXAMPLES = [
@@ -57,15 +85,18 @@ function HitCard({ hit, method, terms }: { hit: SearchHit; method: SearchMethod;
             <p className="line-clamp-2 text-sm font-medium text-fg">{hit.document_title}</p>
             <span
               className="shrink-0 font-mono text-xs text-fg-subtle tabular-nums"
-              title={method === 'dense' ? 'Cosine similarity' : 'BM25 score'}
+              title={METHODS[method].scoreLabel}
             >
-              {hit.score.toFixed(method === 'dense' ? 3 : 2)}
+              {hit.score.toFixed(METHODS[method].digits)}
             </span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
             <Badge tone="accent">{formatPageRange(hit.page_start, hit.page_end)}</Badge>
             {hit.section && <span className="truncate">{hit.section}</span>}
           </div>
+          {(method === 'hybrid' || method === 'hybrid_rerank') && provenance(hit) && (
+            <p className="mt-1 text-xs text-fg-subtle">Found by {provenance(hit)}</p>
+          )}
           <p
             className={`mt-2 text-sm leading-relaxed whitespace-pre-line text-fg-muted ${expanded ? '' : 'line-clamp-4'}`}
           >
@@ -123,7 +154,7 @@ function MethodColumn({ result, terms }: { result: MethodResults; terms: string[
   )
 }
 
-/** Compare what dense and keyword retrieval find for the same question. */
+/** Compare what each retrieval stage finds for the same question. */
 export function RetrievalPlayground() {
   const documents = useApi(api.listDocuments)
   const searchable = (documents.data?.items ?? []).filter((doc) => doc.indexing_status === 'indexed')
@@ -131,6 +162,7 @@ export function RetrievalPlayground() {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string[] | null>(null)
   const [topK, setTopK] = useState(5)
+  const [methods, setMethods] = useState<SearchMethod[]>(ALL_METHODS)
   const [response, setResponse] = useState<SearchResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
@@ -145,7 +177,7 @@ export function RetrievalPlayground() {
       setResponse(
         await api.search({
           query: text,
-          methods: ['dense', 'bm25'],
+          methods,
           top_k: topK,
           document_ids: stillSearchable && stillSearchable.length > 0 ? stillSearchable : null,
         }),
@@ -157,6 +189,15 @@ export function RetrievalPlayground() {
     }
   }
 
+  const toggleMethod = (method: SearchMethod) => {
+    setMethods((current) => {
+      const next = current.includes(method)
+        ? current.filter((item) => item !== method)
+        : ALL_METHODS.filter((item) => item === method || current.includes(item))
+      return next.length > 0 ? next : current // keep at least one stage
+    })
+  }
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
     void run(query)
@@ -165,7 +206,7 @@ export function RetrievalPlayground() {
   const header = (
     <CardHeader
       title="Retrieval playground"
-      description="See what semantic and keyword search retrieve for the same question. Nothing here calls the LLM."
+      description="Compare what each stage of the retrieval pipeline finds for the same question. Nothing here calls the LLM."
     />
   )
 
@@ -217,7 +258,7 @@ export function RetrievalPlayground() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <DocumentFilter documents={searchable} selected={selected} onChange={setSelected} />
           <label className="flex items-center gap-2 text-sm text-fg-muted">
-            Results per method
+            Results per stage
             <select
               value={topK}
               onChange={(event) => setTopK(Number(event.target.value))}
@@ -234,6 +275,27 @@ export function RetrievalPlayground() {
             {searching ? <Spinner className="text-accent-fg" /> : <Search className="size-4" aria-hidden />}
             Search
           </Button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Stages to compare">
+          <span className="text-xs text-fg-subtle">Compare:</span>
+          {ALL_METHODS.map((method) => {
+            const active = methods.includes(method)
+            return (
+              <button
+                key={method}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleMethod(method)}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  active
+                    ? 'border-accent bg-accent-soft text-accent-text'
+                    : 'border-border text-fg-muted hover:bg-surface-muted'
+                }`}
+              >
+                {METHODS[method].label}
+              </button>
+            )
+          })}
         </div>
         {!response && (
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -273,8 +335,8 @@ export function RetrievalPlayground() {
         )}
         {!response && !error && (
           <p className="text-sm text-fg-muted">
-            Results from each retriever appear here side by side, with page references and
-            the words they matched.
+            Results from each stage appear here side by side, with page references, the words
+            they matched, and where fused results came from.
           </p>
         )}
       </div>
