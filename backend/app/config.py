@@ -72,12 +72,14 @@ class Settings(BaseSettings):
     reranker_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # How many fused candidates the cross-encoder scores (cost grows linearly).
     rerank_candidates: int = Field(default=20, gt=0)
-    # Evidence gate on the cross-encoder's raw score (logit). The MS MARCO model
-    # ranks research passages well but scores them low in absolute terms (correct
-    # passages measured -9 to +9, unrelated text about -11), so the gate sits just
-    # above that noise floor and mainly filters text with nothing to do with the
-    # question. Tuned against unanswerable questions in the Phase 11 evaluation.
-    min_rerank_score: float = -10.0
+    # Optional evidence gate on the cross-encoder's raw score (logit): passages
+    # below it are dropped, and if none remain the question is refused without
+    # calling the LLM. Off by default: with ms-marco-MiniLM-L-6-v2, answerable
+    # paraphrased research questions scored as low as -11.1 while unanswerable
+    # ones scored up to -9.9, so no threshold separates them (it still ranked
+    # the right passage first or second in every case). Enable it with a
+    # better-calibrated reranker; the Phase 11 evaluation measures the effect.
+    min_rerank_score: float | None = None
     final_context_chunks: int = Field(default=8, gt=0)
     max_context_tokens: int = Field(default=6000, gt=0)
 
