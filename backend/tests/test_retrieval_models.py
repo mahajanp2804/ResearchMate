@@ -51,7 +51,9 @@ def client(tmp_path_factory: pytest.TempPathFactory):
 
 
 def top_titles(client: TestClient, query: str) -> dict[str, list[str]]:
-    body = client.post("/api/retrieval/search", json={"query": query, "top_k": 3}).json()
+    body = client.post(
+        "/api/retrieval/search", json={"query": query, "top_k": 3, "methods": ["dense", "bm25"]}
+    ).json()
     return {
         result["method"]: [hit["document_title"] for hit in result["hits"]]
         for result in body["results"]
