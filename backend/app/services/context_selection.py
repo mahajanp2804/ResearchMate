@@ -17,11 +17,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # retrieval_service imports this module, so only for type hints
     from app.services.retrieval_service import RetrievedChunk
 
-# Passages sharing this share of their distinct words (Jaccard similarity)
-# count as near-duplicates, e.g. a section repeated in a paper, or the same
-# paper uploaded twice in two versions. Adjacent chunks only share their
-# overlap (about 50 of 250 tokens), well below this.
+# Two passages are near-duplicates (e.g. a section repeated in a paper, or the
+# same paper uploaded twice in two versions) if they share most of their
+# distinct words (Jaccard similarity), or if nearly all words of the shorter
+# one appear in the other (it adds almost nothing). Adjacent chunks only share
+# their overlap, about 50 of 250 tokens, far below both thresholds.
 NEAR_DUPLICATE_SIMILARITY = 0.8
+NEAR_DUPLICATE_CONTAINMENT = 0.9
 
 _WORD = re.compile(r"\w+")
 
@@ -30,10 +32,14 @@ def _words(text: str) -> frozenset[str]:
     return frozenset(_WORD.findall(text.lower()))
 
 
-def _jaccard(first: frozenset[str], second: frozenset[str]) -> float:
+def _is_near_duplicate(first: frozenset[str], second: frozenset[str]) -> bool:
     if not first or not second:
-        return 0.0
-    return len(first & second) / len(first | second)
+        return False
+    shared = len(first & second)
+    return (
+        shared / len(first | second) >= NEAR_DUPLICATE_SIMILARITY
+        or shared / min(len(first), len(second)) >= NEAR_DUPLICATE_CONTAINMENT
+    )
 
 
 @dataclass(frozen=True)
@@ -73,7 +79,7 @@ def select_context(
             low_score += 1
             continue
         words = _words(candidate.text)
-        if any(_jaccard(words, kept) >= NEAR_DUPLICATE_SIMILARITY for kept in selected_words):
+        if any(_is_near_duplicate(words, kept) for kept in selected_words):
             duplicates += 1
             continue
         if total_tokens + candidate.token_count > max_tokens:

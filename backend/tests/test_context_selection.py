@@ -58,6 +58,28 @@ def test_near_duplicates_are_dropped() -> None:
     assert selection.dropped_duplicates == 1
 
 
+def test_passage_contained_in_a_kept_one_is_dropped() -> None:
+    # The second passage repeats the first and adds one sentence. Jaccard is
+    # 0.73, below the 0.8 threshold, but every word of the first appears in it,
+    # so only the containment rule catches it.
+    paragraph = (
+        "FedProx tolerates partial work: each device may perform a variable number of local "
+        "updates. The proximal term limits the impact of local updates by keeping them close "
+        "to the global model. We prove convergence under a bounded dissimilarity assumption."
+    )
+    extended = (
+        "Clients upload compressed gradients over slow cellular networks during nightly "
+        f"charging windows. {paragraph}"
+    )
+    selection = select_context(
+        [candidate(1, paragraph), candidate(2, extended), candidate(3, DISTINCT[1])],
+        max_chunks=5,
+        max_tokens=10_000,
+    )
+    assert ids(selection) == [1, 3]
+    assert selection.dropped_duplicates == 1
+
+
 def test_overlapping_neighbouring_chunks_are_kept() -> None:
     # Consecutive chunks share a sentence of overlap but are otherwise different.
     shared = "The proximal term keeps local models close to the global model."
