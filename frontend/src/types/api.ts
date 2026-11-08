@@ -46,6 +46,8 @@ export interface SystemInfo {
     reranker_enabled: boolean
     reranker_model_name: string
     rerank_candidates: number
+    /** Evidence threshold on cross-encoder scores; null when off. */
+    min_rerank_score: number | null
     final_context_chunks: number
     max_context_tokens: number
   }

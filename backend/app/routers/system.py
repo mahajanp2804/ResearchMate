@@ -67,6 +67,7 @@ def system_info(settings: SettingsDep, ingestion: IngestionDep) -> SystemInfo:
             reranker_enabled=settings.reranker_enabled,
             reranker_model_name=settings.reranker_model_name,
             rerank_candidates=settings.rerank_candidates,
+            min_rerank_score=settings.min_rerank_score,
             final_context_chunks=settings.final_context_chunks,
             max_context_tokens=settings.max_context_tokens,
         ),

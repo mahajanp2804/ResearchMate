@@ -26,6 +26,8 @@ class RetrievalInfo(BaseModel):
     reranker_enabled: bool
     reranker_model_name: str
     rerank_candidates: int
+    # Cross-encoder score below which passages are not used as evidence; null = off.
+    min_rerank_score: float | None
     final_context_chunks: int
     max_context_tokens: int
 

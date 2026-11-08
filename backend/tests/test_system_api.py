@@ -43,6 +43,7 @@ def test_system_info_never_exposes_secrets(tmp_path) -> None:
     assert body["llm"]["configured"] is True
     assert body["chunking"] == {"chunk_size_tokens": 250, "chunk_overlap_tokens": 50}
     assert body["embedding_model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert body["retrieval"]["min_rerank_score"] is None  # evidence gate off by default
 
 
 def test_dashboard_stats_empty(client: TestClient) -> None:

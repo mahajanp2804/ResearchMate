@@ -112,6 +112,10 @@ export default function Settings() {
                 <SettingRow label="Keyword candidates (BM25 top-k)" value={info.retrieval.bm25_top_k} />
                 <SettingRow label="RRF constant (k)" value={info.retrieval.rrf_k} />
                 <SettingRow label="Candidates reranked" value={info.retrieval.rerank_candidates} />
+                <SettingRow
+                  label="Evidence threshold (cross-encoder score)"
+                  value={info.retrieval.min_rerank_score ?? 'Off'}
+                />
                 <SettingRow label="Chunks sent to the LLM" value={info.retrieval.final_context_chunks} />
                 <SettingRow label="Context token budget" value={info.retrieval.max_context_tokens} />
               </dl>
