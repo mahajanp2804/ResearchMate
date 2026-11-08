@@ -1,6 +1,7 @@
 import type {
   ApiErrorBody,
   ChunkListResponse,
+  ContextResponse,
   DashboardStats,
   DocumentDetail,
   DocumentListResponse,
@@ -129,9 +130,17 @@ export const api = {
       { signal },
     ),
   uploadDocument,
-  /** Run dense and/or BM25 retrieval and get each method's ranked passages. */
+  /** Run pipeline stages (dense, bm25, hybrid, hybrid_rerank) and get each one's ranked passages. */
   search: (body: SearchRequest, signal?: AbortSignal) =>
     request<SearchResponse>('/api/retrieval/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal,
+    }),
+  /** The passages the answer pipeline would send to the LLM for this question. */
+  context: (body: { query: string; document_ids?: string[] | null }, signal?: AbortSignal) =>
+    request<ContextResponse>('/api/retrieval/context', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

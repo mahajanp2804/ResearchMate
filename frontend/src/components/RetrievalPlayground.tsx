@@ -24,6 +24,16 @@ const METHODS: Record<SearchMethod, { label: string; description: string; empty:
     description: 'Exact term matching. Finds names, acronyms, datasets and numbers.',
     empty: 'No passage shares a word with the query, so BM25 has nothing to rank.',
   },
+  hybrid: {
+    label: 'Hybrid · RRF',
+    description: 'Dense and BM25 lists fused by rank (Reciprocal Rank Fusion).',
+    empty: 'Neither retriever found a passage.',
+  },
+  hybrid_rerank: {
+    label: 'Hybrid + rerank',
+    description: 'Fused candidates rescored by a cross-encoder reading question and passage together.',
+    empty: 'Neither retriever found a passage.',
+  },
 }
 
 const EXAMPLES = [
@@ -135,6 +145,7 @@ export function RetrievalPlayground() {
       setResponse(
         await api.search({
           query: text,
+          methods: ['dense', 'bm25'],
           top_k: topK,
           document_ids: stillSearchable && stillSearchable.length > 0 ? stillSearchable : null,
         }),

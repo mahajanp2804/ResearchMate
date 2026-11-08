@@ -184,7 +184,8 @@ export interface ApiErrorBody {
 
 // --- Retrieval ---------------------------------------------------------------
 
-export type SearchMethod = 'dense' | 'bm25'
+/** dense and bm25 retrieve; hybrid fuses them (RRF); hybrid_rerank rescores with a cross-encoder. */
+export type SearchMethod = 'dense' | 'bm25' | 'hybrid' | 'hybrid_rerank'
 
 export interface SearchRequest {
   query: string
@@ -196,7 +197,10 @@ export interface SearchRequest {
 
 export interface SearchHit {
   rank: number
-  /** Cosine similarity (dense) or BM25 score; only comparable within one method. */
+  /**
+   * Cosine similarity (dense), BM25 score, RRF score (hybrid) or cross-encoder
+   * logit (hybrid_rerank). Only comparable within one method's list.
+   */
   score: number
   chunk_id: number
   document_id: string
@@ -206,6 +210,9 @@ export interface SearchHit {
   page_end: number
   section: string | null
   text: string
+  token_count: number
+  /** Rank in each stage that saw this passage, e.g. { dense: 3, bm25: 1, hybrid: 2 }. */
+  source_ranks: Partial<Record<'dense' | 'bm25' | 'hybrid', number>>
 }
 
 export interface MethodResults {
@@ -219,4 +226,21 @@ export interface SearchResponse {
   results: MethodResults[]
   searched_document_count: number
   skipped_document_ids: string[]
+}
+
+/** The passages the answer pipeline would send to the LLM, as sources S1..Sn. */
+export interface ContextResponse {
+  query: string
+  reranked: boolean
+  has_evidence: boolean
+  passages: SearchHit[]
+  total_tokens: number
+  max_tokens: number
+  max_passages: number
+  /** Evidence threshold on cross-encoder scores; null when disabled. */
+  min_score: number | null
+  dropped: { low_score: number; duplicates: number; over_budget: number }
+  searched_document_count: number
+  skipped_document_ids: string[]
+  latency_ms: number
 }
