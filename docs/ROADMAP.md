@@ -48,7 +48,9 @@ acceptance criteria each phase must meet before the next one starts.
 | Similarity | Inner product on L2-normalised vectors | Equivalent to cosine similarity, exact search, fast enough for tens of thousands of chunks on a laptop. |
 | Document filtering | Applied **inside** each retriever (FAISS `IDSelector`, BM25 score mask) | Out-of-scope chunks can never reach fusion, reranking or the LLM prompt. |
 | Fusion | Reciprocal Rank Fusion, `k = 60` | Rank-based, so dense cosine scores and BM25 scores never need to be put on the same scale. |
-| Grounding gate | If no candidate passes a reranker-score threshold, return the fixed "couldn't find sufficient supporting information" answer **without calling the LLM** | Refusal does not depend on the LLM obeying the prompt. |
+| Grounding gate *(revised in Phase 6)* | Refuse **without calling the LLM** whenever retrieval yields no context. A reranker-score threshold (`MIN_RERANK_SCORE`) exists but is **off by default**; otherwise the strict grounding prompt (Phase 7) and citation validation (Phase 8) decide | Measured with `ms-marco-MiniLM-L-6-v2`: answerable paraphrased research questions scored as low as −11.1 and unanswerable ones as high as −9.9, so no threshold separates them, although the right passage ranked 1st in 9/12 and 2nd in 3/12. Phase 11 measures refusal accuracy and can re-enable the gate with a better-calibrated reranker. |
+| Reranking value | Reranking is on (spec requirement) but its benefit is not assumed | On small research-paper tests it was mixed: it lifted a paraphrase's answer into the top 3 but demoted the right passage for "Which datasets were used?" when all scores sat near the noise floor. Phase 11 compares hybrid vs hybrid + rerank (and a stronger cross-encoder) on real numbers. |
+| Context de-duplication | Drop a passage whose words overlap a kept one by Jaccard ≥ 0.8 or are ≥ 90% contained in it | Repeated sections and near-identical uploads waste context slots; neighbouring chunks share only their ~20% overlap. |
 | Citations | Sources numbered `[S1]…[Sn]` in the prompt; markers in the answer are parsed and validated against the sources actually sent | The LLM never writes page numbers or file names itself, so it cannot invent them. |
 | Prompt injection | Document text is wrapped in delimited, labelled source blocks and the system prompt states it is untrusted data | Instructions inside a PDF are treated as content to quote, not orders to follow. |
 | LLM layer | `LLMProvider` abstract base class; `GeminiProvider` first; provider chosen by config | A local model (e.g. Ollama) or another API is a new class, not a pipeline rewrite. |
@@ -101,7 +103,7 @@ ResearchMate/
 │   │   │   ├── ingestion_service.py   # chunk → embed → index for stored documents
 │   │   │   ├── pdf_service.py  text_cleaning.py  chunking_service.py  tokenization.py
 │   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py  retrieval_service.py
-│   │   │   ├── hybrid_retriever.py  reranker.py  rag_pipeline.py
+│   │   │   ├── hybrid_retriever.py  reranker.py  context_selection.py  rag_pipeline.py
 │   │   │   ├── llm_service.py  citation_service.py
 │   │   │   ├── summarization_service.py  comparison_service.py  research_gap_service.py
 │   │   │   └── evaluation_service.py  activity_service.py  stats_service.py
@@ -207,6 +209,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 ### Phase 6 — Hybrid fusion & reranking
 - RRF fusion, cross-encoder rerank of the top-N fused candidates, context selection (overlap de-duplication, token budget, minimum-evidence threshold).
 - **Done when:** tests verify fusion arithmetic, rerank ordering and filter preservation end-to-end.
+- **Status: done.** `POST /api/retrieval/search` compares all four stages with per-stage source ranks; `POST /api/retrieval/context` shows exactly what the LLM would receive. The playground shows both. The score-based evidence gate was measured and turned off by default (see *Grounding gate* above).
 
 ### Phase 7 — LLM integration & grounded QA
 - Provider interface + Gemini provider; clear errors for missing key, quota and timeouts.
