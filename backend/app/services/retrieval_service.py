@@ -63,6 +63,7 @@ class RetrievedChunk:
     page_end: int
     section: str | None
     text: str
+    token_count: int
 
 
 class RetrievalService:
@@ -149,6 +150,7 @@ class RetrievalService:
                     page_end=chunk.page_end,
                     section=chunk.section,
                     text=chunk.text,
+                    token_count=chunk.token_count,
                 )
             )
         return results
