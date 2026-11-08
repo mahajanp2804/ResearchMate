@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.main import create_app
-from tests.fakes import HashingEmbedder, WhitespaceTokenizer
+from tests.fakes import HashingEmbedder, OverlapReranker, WhitespaceTokenizer
 
 
 def make_settings(data_dir: Path, **overrides) -> Settings:
@@ -24,10 +24,16 @@ def make_app(settings: Settings, **overrides) -> FastAPI:
     The fake embedder takes the configured model's name, as the real one would.
     """
     embedder = HashingEmbedder(name=settings.embedding_model_name)
-    values = {"tokenizer_provider": WhitespaceTokenizer, "embedder_provider": lambda: embedder}
+    reranker = OverlapReranker()
+    values = {
+        "tokenizer_provider": WhitespaceTokenizer,
+        "embedder_provider": lambda: embedder,
+        "reranker_provider": lambda: reranker,
+    }
     values.update(overrides)
     app = create_app(settings, **values)
     app.state.test_embedder = embedder
+    app.state.test_reranker = reranker
     return app
 
 

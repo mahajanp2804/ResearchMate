@@ -23,7 +23,8 @@ from app.routers import documents, retrieval, system
 from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
 from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
-from app.services.retrieval_service import RetrievalService
+from app.services.reranker import get_cross_encoder_reranker
+from app.services.retrieval_service import RerankerProvider, RetrievalService
 from app.services.tokenization import get_huggingface_tokenizer
 from app.services.vector_store import VectorStore
 from app.utils.logging import configure_logging, get_logger
@@ -74,11 +75,12 @@ def create_app(
     *,
     tokenizer_provider: TokenizerProvider | None = None,
     embedder_provider: EmbedderProvider | None = None,
+    reranker_provider: RerankerProvider | None = None,
 ) -> FastAPI:
     """Build the application.
 
     The providers let tests swap in deterministic fakes. By default the
-    embedding model and its tokenizer are loaded on first use, so the API
+    embedding model, its tokenizer and the reranker are loaded on first use, so the API
     starts quickly and only pays the model-loading cost when it is needed.
     """
     settings = settings or get_settings()
@@ -97,6 +99,13 @@ def create_app(
                 device=settings.embedding_device,
                 batch_size=settings.embedding_batch_size,
                 query_prefix=settings.embedding_query_prefix,
+            )
+
+    if reranker_provider is None:
+
+        def reranker_provider():
+            return get_cross_encoder_reranker(
+                settings.reranker_model_name, device=settings.embedding_device
             )
 
     ingestion = IngestionService(
@@ -128,7 +137,10 @@ def create_app(
     app.state.database = database
     app.state.ingestion = ingestion
     app.state.retrieval = RetrievalService(
-        ingestion, BM25Service(k1=settings.bm25_k1, b=settings.bm25_b)
+        settings=settings,
+        ingestion=ingestion,
+        bm25=BM25Service(k1=settings.bm25_k1, b=settings.bm25_b),
+        reranker_provider=reranker_provider,
     )
 
     app.add_middleware(

@@ -7,11 +7,15 @@ stay in relevance order; they become the numbered sources [S1], [S2], ...
 that answers cite.
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from app.services.retrieval_service import RetrievedChunk
+if TYPE_CHECKING:  # retrieval_service imports this module, so only for type hints
+    from app.services.retrieval_service import RetrievedChunk
 
 # Passages sharing this share of their distinct words (Jaccard similarity)
 # count as near-duplicates, e.g. a section repeated in a paper, or the same
