@@ -2,9 +2,16 @@ import { ExternalLink, FileText, Search, Timer } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
-import type { MethodResults, SearchHit, SearchMethod, SearchResponse } from '../types/api'
+import type {
+  ContextResponse,
+  MethodResults,
+  SearchHit,
+  SearchMethod,
+  SearchResponse,
+} from '../types/api'
 import { formatPageRange, pluralize } from '../utils/format'
 import { queryTerms, snippetAroundMatch } from '../utils/highlight'
+import { ContextPreview } from './ContextPreview'
 import { DocumentFilter } from './DocumentFilter'
 import { Highlighted } from './Highlighted'
 import { Badge } from './ui/Badge'
@@ -164,6 +171,7 @@ export function RetrievalPlayground() {
   const [topK, setTopK] = useState(5)
   const [methods, setMethods] = useState<SearchMethod[]>(ALL_METHODS)
   const [response, setResponse] = useState<SearchResponse | null>(null)
+  const [context, setContext] = useState<ContextResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searching, setSearching] = useState(false)
 
@@ -173,15 +181,15 @@ export function RetrievalPlayground() {
     setError(null)
     // Drop selections of papers deleted since they were chosen.
     const stillSearchable = selected?.filter((id) => searchable.some((doc) => doc.id === id))
+    const documentIds = stillSearchable && stillSearchable.length > 0 ? stillSearchable : null
     try {
-      setResponse(
-        await api.search({
-          query: text,
-          methods,
-          top_k: topK,
-          document_ids: stillSearchable && stillSearchable.length > 0 ? stillSearchable : null,
-        }),
-      )
+      // The context preview runs the same question through the answer pipeline.
+      const [results, selected] = await Promise.all([
+        api.search({ query: text, methods, top_k: topK, document_ids: documentIds }),
+        api.context({ query: text, document_ids: documentIds }),
+      ])
+      setResponse(results)
+      setContext(selected)
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : 'Search failed. Please try again.')
     } finally {
@@ -331,6 +339,7 @@ export function RetrievalPlayground() {
                 <MethodColumn key={result.method} result={result} terms={terms} />
               ))}
             </div>
+            {context && <ContextPreview context={context} />}
           </>
         )}
         {!response && !error && (
