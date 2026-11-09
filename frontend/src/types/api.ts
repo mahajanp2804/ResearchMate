@@ -246,3 +246,66 @@ export interface ContextResponse {
   skipped_document_ids: string[]
   latency_ms: number
 }
+
+// --- Chat --------------------------------------------------------------------
+
+/** A passage given to the LLM, numbered the way the answer cites it. */
+export interface ChatSource {
+  source_id: string
+  chunk_id: number
+  document_id: string
+  document_title: string
+  page_start: number
+  page_end: number
+  section: string | null
+  text: string
+  score: number
+}
+
+/**
+ * How an answer was produced. `no_evidence`: refused without calling the LLM;
+ * `model_declined`: the LLM judged the sources insufficient.
+ */
+export interface AnswerDetails {
+  outcome: 'answered' | 'no_evidence' | 'model_declined'
+  standalone_question: string
+  model: string | null
+  context_tokens: number
+  truncated: boolean
+  timings_ms: Record<string, number>
+  searched_document_count: number
+  skipped_document_ids: string[]
+}
+
+export interface ChatMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+  sources: ChatSource[]
+  details: AnswerDetails | null
+}
+
+export interface ConversationSummary {
+  id: string
+  title: string
+  document_ids: string[] | null
+  message_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationDetail extends ConversationSummary {
+  messages: ChatMessage[]
+}
+
+export interface ConversationListResponse {
+  items: ConversationSummary[]
+  total: number
+}
+
+export interface ChatResponse {
+  conversation: ConversationSummary
+  user_message: ChatMessage
+  assistant_message: ChatMessage
+}

@@ -1,7 +1,10 @@
 import type {
   ApiErrorBody,
+  ChatResponse,
   ChunkListResponse,
   ContextResponse,
+  ConversationDetail,
+  ConversationListResponse,
   DashboardStats,
   DocumentDetail,
   DocumentListResponse,
@@ -145,6 +148,23 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       signal,
+    }),
+  /** Ask a question, continuing `conversation_id` if given; `document_ids` null = all papers. */
+  ask: (body: { question: string; conversation_id?: string | null; document_ids?: string[] | null }) =>
+    request<ChatResponse>('/api/chat/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  listConversations: (signal?: AbortSignal) =>
+    request<ConversationListResponse>('/api/chat/conversations?limit=200', { signal }),
+  getConversation: (conversationId: string, signal?: AbortSignal) =>
+    request<ConversationDetail>(`/api/chat/conversations/${encodeURIComponent(conversationId)}`, {
+      signal,
+    }),
+  deleteConversation: (conversationId: string) =>
+    request<null>(`/api/chat/conversations/${encodeURIComponent(conversationId)}`, {
+      method: 'DELETE',
     }),
   /** URL of the original PDF, optionally opened at a 1-based page. */
   documentFileUrl: (documentId: string, page?: number) =>
