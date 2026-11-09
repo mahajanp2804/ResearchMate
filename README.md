@@ -4,9 +4,9 @@ AI-powered research paper analysis. Upload academic papers, ask questions across
 them, compare methods and results, and surface research gaps. Every answer comes
 from your papers and cites the document, page and passage it relies on.
 
-> **Status:** under active development. Phases 1–6 (setup, PDF ingestion, chunking,
-> embeddings, the FAISS index, dense + BM25 retrieval, hybrid fusion, reranking and
-> context selection) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
+> **Status:** under active development. Phases 1–7 (setup, PDF ingestion, chunking,
+> embeddings, the FAISS index, dense + BM25 retrieval, hybrid fusion, reranking, context
+> selection and grounded question answering with Gemini) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
 > phase plan. Full documentation will be added in Phase 13.
 
 ## Planned pipeline
@@ -53,6 +53,18 @@ npm run dev
 
 App: http://localhost:5173. In development, Vite proxies `/api` requests to the backend.
 
+### Gemini API key
+
+Answers are generated with Google Gemini. Get a free key at
+https://aistudio.google.com/apikey and put it in `backend/.env`:
+
+```bash
+GEMINI_API_KEY=your-key-here
+```
+
+Restart the backend afterwards. Without a key, everything except answer generation
+works, and questions your papers cannot answer still get the refusal message.
+
 ### Tests and checks
 
 ```bash
@@ -60,5 +72,6 @@ cd backend && .venv/bin/pytest && .venv/bin/ruff check .
 cd frontend && npm run build && npm run lint
 ```
 
-Tests marked `models` download the embedding model's tokenizer from Hugging Face on
-first run (it is cached afterwards). To run offline, use `.venv/bin/pytest -m "not models"`.
+Tests marked `models` download Hugging Face models on first run (cached afterwards); to
+run offline, use `.venv/bin/pytest -m "not models"`. Tests marked `llm` call the real
+Gemini API and are skipped unless `GEMINI_API_KEY` is set: `.venv/bin/pytest -m llm`.

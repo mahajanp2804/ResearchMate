@@ -54,6 +54,9 @@ acceptance criteria each phase must meet before the next one starts.
 | Citations | Sources numbered `[S1]…[Sn]` in the prompt; markers in the answer are parsed and validated against the sources actually sent | The LLM never writes page numbers or file names itself, so it cannot invent them. |
 | Prompt injection | Document text is wrapped in delimited, labelled source blocks and the system prompt states it is untrusted data | Instructions inside a PDF are treated as content to quote, not orders to follow. |
 | LLM layer | `LLMProvider` abstract base class; `GeminiProvider` first; provider chosen by config | A local model (e.g. Ollama) or another API is a new class, not a pipeline rewrite. |
+| Gemini model | `gemini-3.6-flash` (configurable via `GEMINI_MODEL`) | The current stable Flash model per the Gemini API docs (Nov 2026); `gemini-2.5-flash` is deprecated. The output limit (8,192) leaves room for Gemini 3 "thinking" tokens. |
+| Follow-ups | Rewrite the follow-up into a standalone question with the LLM; send **no history** to the answer step | Retrieval needs one self-contained query, and keeping earlier answers out of the answer prompt stops unverified claims (and stale [S#] ids) from leaking into new answers. |
+| Saving answers | Store each answer with the full text of its sources | An answer stays traceable after its paper is deleted or re-chunked. |
 | Re-embedding | Re-index compares the chunking signature, embedding model and stored vectors and returns `unchanged`, `reembedding` (chunks kept) or `rechunked` | Re-indexing an unchanged paper is free; a model change only re-embeds. |
 | Persistence | SQLAlchemy 2.0 ORM, portable column types, string enums (no native DB enums) | Swapping `DATABASE_URL` to PostgreSQL needs no model changes. |
 | Background work | FastAPI background tasks + status columns polled by the UI | Uploads return immediately; no Celery/Redis needed for a single-user local app. |
@@ -106,9 +109,9 @@ ResearchMate/
 │   │   │   ├── hybrid_retriever.py  reranker.py  context_selection.py  rag_pipeline.py
 │   │   │   ├── llm_service.py  citation_service.py
 │   │   │   ├── summarization_service.py  comparison_service.py  research_gap_service.py
-│   │   │   └── evaluation_service.py  activity_service.py  stats_service.py
+│   │   │   └── evaluation_service.py  activity_service.py  stats_service.py  chat_service.py
 │   │   ├── prompts/
-│   │   │   ├── answer_prompt.py  summary_prompt.py  comparison_prompt.py  research_gap_prompt.py
+│   │   │   ├── answer_prompt.py  rewrite_prompt.py  summary_prompt.py  comparison_prompt.py  research_gap_prompt.py
 │   │   └── utils/
 │   │       ├── logging.py  file_validation.py
 │   ├── evaluation/datasets/      # curated evaluation questions (JSON)
@@ -216,6 +219,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 - Strict grounding prompt with delimited untrusted sources; refusal sentence enforced in code when evidence is insufficient.
 - `POST /api/chat/query`, conversations and history, follow-up questions rewritten into standalone queries.
 - **Done when:** tests (with a fake provider) prove the no-context path returns the refusal without calling the LLM.
+- **Status: done.** Refusals without an LLM call cover an empty or unsearchable library and the optional evidence gate (so they work with no API key); a model refusal is normalised to the exact sentence. Opt-in live tests (`pytest -m llm`) check grounding, refusal and resistance to instructions planted in a paper once `GEMINI_API_KEY` is set. The Research Assistant page has saved conversations, paper filters, citation chips and sources.
 
 ### Phase 8 — Citation generation & validation
 - Parse `[S#]` markers, discard markers that don't match a sent source, attach document title, page and excerpt; flag uncited answers.
