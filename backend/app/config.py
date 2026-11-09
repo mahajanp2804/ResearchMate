@@ -86,10 +86,16 @@ class Settings(BaseSettings):
     # --- LLM ---------------------------------------------------------------
     llm_provider: Literal["gemini"] = "gemini"
     gemini_api_key: SecretStr | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # Current stable Flash model (Gemini API docs, November 2026);
+    # gemini-2.5-flash is deprecated.
+    gemini_model: str = "gemini-3.6-flash"
     llm_temperature: float = Field(default=0.1, ge=0.0, le=2.0)
-    llm_max_output_tokens: int = Field(default=2048, gt=0)
+    # Gemini 3 models "think" before answering and the thinking tokens can
+    # count towards this limit, so it leaves room beyond the answer itself.
+    llm_max_output_tokens: int = Field(default=8192, gt=0)
     llm_timeout_seconds: int = Field(default=60, gt=0)
+    # Earlier messages of a conversation used to resolve follow-up questions.
+    llm_history_messages: int = Field(default=6, ge=0, le=20)
 
     @model_validator(mode="after")
     def _validate(self) -> "Settings":
