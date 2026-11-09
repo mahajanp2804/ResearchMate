@@ -59,3 +59,17 @@ class UpstreamServiceError(ResearchMateError):
 
     status_code = 502
     code = "upstream_error"
+
+
+class RateLimitedError(ResearchMateError):
+    """An external service refused the request because of a rate limit or quota."""
+
+    status_code = 429
+    code = "rate_limited"
+
+
+class UpstreamTimeoutError(ResearchMateError):
+    """An external service did not answer in time."""
+
+    status_code = 504
+    code = "upstream_timeout"
