@@ -97,3 +97,49 @@ def unavailable_reranker():
     raise ServiceUnavailableError(
         "Could not load the reranking model (simulated outage).", code="reranker_unavailable"
     )
+
+
+class ScriptedLLM:
+    """Stand-in LLM that records every call and answers deterministically.
+
+    Rewrite calls return the latest question unchanged unless ``rewrite`` is
+    given. Answer calls cite the first source with its first sentence unless
+    ``answer`` is given. Either can be a string or a function of the prompt.
+    """
+
+    name = "scripted"
+    model = "scripted-model"
+
+    def __init__(self, answer=None, rewrite=None) -> None:
+        self.answer = answer
+        self.rewrite = rewrite
+        self.calls: list[dict] = []
+
+    def generate(self, *, system_prompt, turns, temperature=None, max_output_tokens=None):
+        from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT
+        from app.services.llm_service import LLMResponse
+
+        prompt = turns[-1].content
+        kind = "rewrite" if system_prompt == REWRITE_SYSTEM_PROMPT else "answer"
+        self.calls.append(
+            {
+                "kind": kind,
+                "system": system_prompt,
+                "turns": list(turns),
+                "temperature": temperature,
+            }
+        )
+        script = self.rewrite if kind == "rewrite" else self.answer
+        if callable(script):
+            text = script(prompt)
+        elif script is not None:
+            text = script
+        elif kind == "rewrite":
+            text = prompt.split("Latest question: ", 1)[1].split("\n", 1)[0]
+        else:
+            first_source = prompt.split(">\n", 1)[1].split("\n</source>", 1)[0]
+            text = f"{first_source.split('. ')[0].rstrip('.')} [S1]."
+        return LLMResponse(text=text, model=self.model, prompt_tokens=len(prompt.split()))
+
+    def calls_of(self, kind: str) -> list[dict]:
+        return [call for call in self.calls if call["kind"] == kind]

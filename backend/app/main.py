@@ -23,6 +23,8 @@ from app.routers import documents, retrieval, system
 from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
 from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
+from app.services.llm_service import cached_provider, create_llm_provider
+from app.services.rag_pipeline import LLMProviderFactory, RagPipeline
 from app.services.reranker import get_cross_encoder_reranker
 from app.services.retrieval_service import RerankerProvider, RetrievalService
 from app.services.tokenization import get_huggingface_tokenizer
@@ -76,12 +78,14 @@ def create_app(
     tokenizer_provider: TokenizerProvider | None = None,
     embedder_provider: EmbedderProvider | None = None,
     reranker_provider: RerankerProvider | None = None,
+    llm_provider: LLMProviderFactory | None = None,
 ) -> FastAPI:
     """Build the application.
 
     The providers let tests swap in deterministic fakes. By default the
-    embedding model, its tokenizer and the reranker are loaded on first use, so the API
-    starts quickly and only pays the model-loading cost when it is needed.
+    embedding model, its tokenizer, the reranker and the LLM client are created
+    on first use, so the API starts quickly and only pays the loading cost when
+    it is needed.
     """
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -107,6 +111,10 @@ def create_app(
             return get_cross_encoder_reranker(
                 settings.reranker_model_name, device=settings.embedding_device
             )
+
+    if llm_provider is None:
+        # Created on first use; a missing key is reported then, not at startup.
+        llm_provider = cached_provider(lambda: create_llm_provider(settings))
 
     ingestion = IngestionService(
         settings=settings,
@@ -141,6 +149,9 @@ def create_app(
         ingestion=ingestion,
         bm25=BM25Service(k1=settings.bm25_k1, b=settings.bm25_b),
         reranker_provider=reranker_provider,
+    )
+    app.state.rag = RagPipeline(
+        settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
     )
 
     app.add_middleware(
