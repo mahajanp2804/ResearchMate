@@ -9,6 +9,7 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = [
     "models: downloads a Hugging Face model on first run (cached afterwards); deselect with -m 'not models'",
+    "llm: calls the real Gemini API; skipped unless GEMINI_API_KEY is configured",
 ]
 filterwarnings = [
     # Starlette now prefers the httpx2 fork for its TestClient; httpx still works
