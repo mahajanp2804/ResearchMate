@@ -1,4 +1,4 @@
-import { Bot, SearchX, TriangleAlert } from 'lucide-react'
+import { Bot, SearchX, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { useState } from 'react'
 import type { AnswerDetails, ChatMessage } from '../../types/api'
 import { sourceAnchorId } from '../../utils/answerFormat'
@@ -26,6 +26,57 @@ function AnswerMeta({ details, question }: { details: AnswerDetails; question?: 
       )}
       <p>{parts.join(' · ')}</p>
     </div>
+  )
+}
+
+/** Warnings from the citation check: uncited claims and removed citations. */
+function CitationNotice({ details }: { details: AnswerDetails }) {
+  const [showStatements, setShowStatements] = useState(false)
+  const removed = details.invalid_citation_ids
+  const uncited = details.uncited_statements
+
+  return (
+    <>
+      {details.citation_status === 'uncited' && (
+        <p className="flex gap-2 rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-xs text-fg">
+          <ShieldAlert className="mt-px size-3.5 shrink-0 text-danger" aria-hidden />
+          This answer doesn't cite any source, so it can't be traced to your papers. Treat it
+          with caution.
+        </p>
+      )}
+      {details.citation_status === 'partially_cited' && uncited.length > 0 && (
+        <div className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-fg">
+          <button
+            type="button"
+            onClick={() => setShowStatements((value) => !value)}
+            aria-expanded={showStatements}
+            className="flex w-full items-start gap-2 text-left"
+          >
+            <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+            <span className="flex-1">
+              {uncited.length === 1
+                ? "1 statement isn't backed by a source."
+                : `${uncited.length} statements aren't backed by a source.`}{' '}
+              <span className="text-accent-text">{showStatements ? 'Hide' : 'Show'}</span>
+            </span>
+          </button>
+          {showStatements && (
+            <ul className="mt-1.5 list-disc space-y-1 pl-9 text-fg-muted">
+              {uncited.map((statement) => (
+                <li key={statement}>{statement}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {removed.length > 0 && (
+        <p className="text-xs text-fg-subtle">
+          Removed {removed.length === 1 ? 'a citation' : `${removed.length} citations`} to{' '}
+          {removed.length === 1 ? 'a source' : 'sources'} the model was not given (
+          {removed.join(', ')}).
+        </p>
+      )}
+    </>
   )
 }
 
@@ -79,6 +130,7 @@ export function MessageBubble({ message, question }: { message: ChatMessage; que
             </p>
           </div>
         )}
+        {outcome === 'answered' && details && <CitationNotice details={details} />}
         {details?.truncated && (
           <p className="flex gap-1.5 text-xs text-warning">
             <TriangleAlert className="size-3.5" aria-hidden /> The answer hit the model's output
@@ -94,7 +146,7 @@ export function MessageBubble({ message, question }: { message: ChatMessage; que
             onToggle={() => setSourcesOpen((value) => !value)}
             label={
               outcome === 'answered'
-                ? `Sources (${message.sources.length})`
+                ? undefined
                 : `Passages considered (${message.sources.length})`
             }
           />
