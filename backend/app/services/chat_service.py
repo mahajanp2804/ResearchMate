@@ -5,8 +5,8 @@ so a failed LLM call leaves nothing half-written and can simply be retried.
 
 Each answer is stored with the passages it was given (sources S1..Sn) in
 the message's ``citations`` column, including their text, so an answer stays
-traceable even after its paper is deleted or re-chunked. Phase 8 marks which
-of those sources the answer actually cites.
+traceable even after its paper is deleted or re-chunked. Sources the answer
+actually cites are marked, with their supporting excerpt and exact page.
 """
 
 from typing import Any
@@ -33,23 +33,33 @@ def _title_from(question: str) -> str:
 
 
 def _source_records(answer: RagAnswer) -> list[dict[str, Any]]:
-    return [
-        {
-            "source_id": f"S{number}",
-            "chunk_id": source.chunk_id,
-            "document_id": source.document_id,
-            "document_title": source.document_title,
-            "page_start": source.page_start,
-            "page_end": source.page_end,
-            "section": source.section,
-            "text": source.text,
-            "score": source.score,
-        }
-        for number, source in enumerate(answer.sources, start=1)
-    ]
+    citations = {citation.source_id: citation for citation in answer.citations}
+    records = []
+    for number, source in enumerate(answer.sources, start=1):
+        source_id = f"S{number}"
+        citation = citations.get(source_id)
+        records.append(
+            {
+                "source_id": source_id,
+                "chunk_id": source.chunk_id,
+                "document_id": source.document_id,
+                "document_title": source.document_title,
+                "page_start": source.page_start,
+                "page_end": source.page_end,
+                "section": source.section,
+                "text": source.text,
+                "score": source.score,
+                "cited": citation is not None,
+                "excerpt": citation.excerpt if citation else None,
+                "excerpt_page": citation.page if citation else None,
+                "support": citation.support if citation else None,
+            }
+        )
+    return records
 
 
 def _answer_details(answer: RagAnswer, searched: int, skipped: list[str]) -> dict[str, Any]:
+    coverage = answer.coverage
     return {
         "outcome": answer.outcome,
         "standalone_question": answer.standalone_question,
@@ -59,6 +69,9 @@ def _answer_details(answer: RagAnswer, searched: int, skipped: list[str]) -> dic
         "timings_ms": answer.timings_ms,
         "searched_document_count": searched,
         "skipped_document_ids": skipped,
+        "citation_status": coverage.status if coverage else None,
+        "invalid_citation_ids": answer.invalid_citation_ids,
+        "uncited_statements": coverage.uncited_statements if coverage else [],
     }
 
 

@@ -26,6 +26,13 @@ class SourceOut(BaseModel):
     section: str | None
     text: str
     score: float
+    # Whether the answer cites this source; uncited sources were retrieved but unused.
+    cited: bool = False
+    # For cited sources: the sentence(s) supporting the answer and their exact page.
+    excerpt: str | None = None
+    excerpt_page: int | None = None
+    # Share of the citing statements' key terms found in the source (0-1).
+    support: float | None = None
 
 
 class AnswerDetails(BaseModel):
@@ -40,6 +47,12 @@ class AnswerDetails(BaseModel):
     timings_ms: dict[str, float]
     searched_document_count: int
     skipped_document_ids: list[str]
+    # cited / partially_cited / uncited; null for refusals.
+    citation_status: Literal["cited", "partially_cited", "uncited"] | None = None
+    # Ids the model cited that were not among the sources; removed from the answer.
+    invalid_citation_ids: list[str] = []
+    # Claims in the answer that cite no source.
+    uncited_statements: list[str] = []
 
 
 class MessageOut(BaseModel):

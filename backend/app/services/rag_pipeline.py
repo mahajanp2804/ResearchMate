@@ -6,10 +6,11 @@
 3. Evidence check: with no usable passages the fixed refusal is returned and
    the LLM is never called, so this path cannot hallucinate.
 4. Generation: the LLM answers from the numbered sources only.
-5. The model may still decline; its refusal is normalised to the exact
+5. Citation validation: invented [S#] markers are removed, each cited source
+   gets a supporting excerpt and exact page, and claims without citations
+   are flagged.
+6. The model may still decline; its refusal is normalised to the exact
    required sentence.
-
-Citation validation of the generated answer is added in Phase 8.
 """
 
 import time
@@ -17,10 +18,12 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.exceptions import UpstreamServiceError
+from app.models import DocumentPage
 from app.prompts.answer_prompt import (
     ANSWER_SYSTEM_PROMPT,
     REFUSAL,
@@ -28,6 +31,14 @@ from app.prompts.answer_prompt import (
     is_refusal,
 )
 from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT, build_rewrite_turns, clean_rewrite
+from app.services.citation_service import (
+    Citation,
+    Coverage,
+    SourcePassage,
+    build_citations,
+    citation_coverage,
+    validate_citations,
+)
 from app.services.llm_service import ChatTurn, LLMProvider
 from app.services.retrieval_service import (
     RetrievalService,
@@ -62,6 +73,12 @@ class RagAnswer:
     model: str | None
     truncated: bool
     timings_ms: dict[str, float] = field(default_factory=dict)
+    # One entry per source the answer cites, in order of first citation.
+    citations: list[Citation] = field(default_factory=list)
+    # Ids the model cited that were not among the sources (removed from the answer).
+    invalid_citation_ids: list[str] = field(default_factory=list)
+    # None for refusals.
+    coverage: Coverage | None = None
 
     @property
     def refused(self) -> bool:
@@ -132,20 +149,59 @@ class RagPipeline:
             turns=build_answer_turns(question, standalone, context.chunks),
         )
         timings["generation"] = _elapsed_ms(step)
+
+        sources = list(context.chunks)
+        check = validate_citations(response.text, [f"S{n}" for n in range(1, len(sources) + 1)])
+        declined = is_refusal(check.text)
+        citations: list[Citation] = []
+        coverage: Coverage | None = None
+        if not declined:
+            passages = [
+                SourcePassage(
+                    f"S{n}",
+                    chunk.text,
+                    chunk.page_start,
+                    chunk.page_end,
+                    chunk.document_id,
+                    chunk.document_title,
+                )
+                for n, chunk in enumerate(sources, start=1)
+            ]
+            citations = build_citations(check.text, passages, self._page_texts(db, sources))
+            coverage = citation_coverage(check.text)
+            if check.invalid_ids:
+                logger.info("Removed citations to unknown sources: %s", check.invalid_ids)
         timings["total"] = _elapsed_ms(started)
 
-        declined = is_refusal(response.text)
         return RagAnswer(
-            answer=REFUSAL if declined else response.text,
+            answer=REFUSAL if declined else check.text,
             outcome="model_declined" if declined else "answered",
             question=question,
             standalone_question=standalone,
-            sources=list(context.chunks),
+            sources=sources,
             context_tokens=context.total_tokens,
             model=response.model,
             truncated=response.truncated,
             timings_ms=timings,
+            citations=citations,
+            invalid_citation_ids=check.invalid_ids,
+            coverage=coverage,
         )
+
+    @staticmethod
+    def _page_texts(db: Session, sources: Sequence[RetrievedChunk]) -> dict[str, dict[int, str]]:
+        """Raw page text for passages spanning pages, to pin citations to one page."""
+        spans = [chunk for chunk in sources if chunk.page_start != chunk.page_end]
+        texts: dict[str, dict[int, str]] = {}
+        for chunk in spans:
+            rows = db.execute(
+                select(DocumentPage.page_number, DocumentPage.text).where(
+                    DocumentPage.document_id == chunk.document_id,
+                    DocumentPage.page_number.between(chunk.page_start, chunk.page_end),
+                )
+            )
+            texts.setdefault(chunk.document_id, {}).update(dict(rows.all()))
+        return texts
 
     def _rewrite(self, question: str, history: Sequence[ChatTurn]) -> str:
         try:
