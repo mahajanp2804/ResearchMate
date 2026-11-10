@@ -4,9 +4,10 @@ AI-powered research paper analysis. Upload academic papers, ask questions across
 them, compare methods and results, and surface research gaps. Every answer comes
 from your papers and cites the document, page and passage it relies on.
 
-> **Status:** under active development. Phases 1–7 (setup, PDF ingestion, chunking,
+> **Status:** under active development. Phases 1–8 (setup, PDF ingestion, chunking,
 > embeddings, the FAISS index, dense + BM25 retrieval, hybrid fusion, reranking, context
-> selection and grounded question answering with Gemini) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
+> selection, grounded question answering with Gemini, and citation validation with
+> page-level excerpts) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
 > phase plan. Full documentation will be added in Phase 13.
 
 ## Planned pipeline
