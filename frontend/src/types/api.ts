@@ -260,6 +260,13 @@ export interface ChatSource {
   section: string | null
   text: string
   score: number
+  /** Whether the answer cites this source; others were retrieved but unused. */
+  cited: boolean
+  /** For cited sources: the sentence(s) supporting the answer, and their exact page. */
+  excerpt: string | null
+  excerpt_page: number | null
+  /** Share of the citing statements' key terms found in the source (0–1). */
+  support: number | null
 }
 
 /**
@@ -275,6 +282,12 @@ export interface AnswerDetails {
   timings_ms: Record<string, number>
   searched_document_count: number
   skipped_document_ids: string[]
+  /** null for refusals (and for answers saved before citations were checked). */
+  citation_status: 'cited' | 'partially_cited' | 'uncited' | null
+  /** Ids the model cited that were not among the sources; removed from the answer. */
+  invalid_citation_ids: string[]
+  /** Claims in the answer that cite no source. */
+  uncited_statements: string[]
 }
 
 export interface ChatMessage {
