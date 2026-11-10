@@ -18,25 +18,28 @@ def make_settings(data_dir: Path, **overrides) -> Settings:
     return Settings(_env_file=None, **values)
 
 
-def make_app(settings: Settings, **overrides) -> FastAPI:
+def make_app(settings: Settings, *, llm: ScriptedLLM | None = None, **overrides) -> FastAPI:
     """App wired with offline fakes unless a test overrides them.
 
     The fake embedder takes the configured model's name, as the real one would.
+    ``app.state.test_llm`` is the scripted LLM in use (pass ``llm`` to script
+    it); it is None when a test supplies its own ``llm_provider``, so a test
+    can never inspect an LLM the app is not actually calling.
     """
     embedder = HashingEmbedder(name=settings.embedding_model_name)
     reranker = OverlapReranker()
-    llm = ScriptedLLM()
+    scripted = llm or ScriptedLLM()
     values = {
         "tokenizer_provider": WhitespaceTokenizer,
         "embedder_provider": lambda: embedder,
         "reranker_provider": lambda: reranker,
-        "llm_provider": lambda: llm,
+        "llm_provider": lambda: scripted,
     }
     values.update(overrides)
     app = create_app(settings, **values)
     app.state.test_embedder = embedder
     app.state.test_reranker = reranker
-    app.state.test_llm = llm
+    app.state.test_llm = None if "llm_provider" in overrides else scripted
     return app
 
 

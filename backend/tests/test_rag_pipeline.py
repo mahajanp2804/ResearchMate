@@ -24,11 +24,10 @@ def library(tmp_path: Path, llm: ScriptedLLM | None = None, **overrides) -> Iter
     settings = make_settings(
         tmp_path / "data", chunk_size_tokens=32, chunk_overlap_tokens=0, **overrides
     )
-    app = make_app(settings, **({"llm_provider": lambda: llm} if llm else {}))
+    app = make_app(settings, llm=llm)
     with TestClient(app) as client:
         upload(client, make_pdf(FEDPROX, title="Federated Optimization"), "a.pdf")
         upload(client, make_pdf(SCAFFOLD, title="SCAFFOLD Paper Title"), "b.pdf")
-        app.state.test_llm = llm or app.state.test_llm
         yield app
 
 
