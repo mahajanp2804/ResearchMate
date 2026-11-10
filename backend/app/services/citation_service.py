@@ -75,3 +75,130 @@ def validate_citations(answer: str, source_ids: Sequence[str]) -> CitationCheck:
 
     text = CITATION_MARKER.sub(rewrite, answer)
     return CitationCheck(text=_tidy(text).strip(), cited_ids=cited, invalid_ids=invalid)
+
+
+# --- Supporting excerpts and exact pages -----------------------------------
+
+MAX_EXCERPT_CHARS = 400
+# A very short best sentence ("See Table 2.") is extended with the next one.
+MIN_EXCERPT_CHARS = 60
+# Characters of a normalised excerpt used to find it in a page's raw text.
+PAGE_MATCH_CHARS = 80
+SHORT_PAGE_MATCH_CHARS = 30
+
+
+@dataclass(frozen=True)
+class SourcePassage:
+    """What the citation checker needs to know about a source passage."""
+
+    source_id: str
+    text: str
+    page_start: int
+    page_end: int
+
+
+@dataclass(frozen=True)
+class Citation:
+    source_id: str
+    # The sentence(s) of the source that best match the statements citing it.
+    excerpt: str
+    # The page the excerpt is on (exact even when the passage spans pages).
+    page: int
+    # Share of the citing statements' key terms found in the source (0-1).
+    # Low values suggest a weak citation; kept for evaluation, not enforced.
+    support: float
+
+
+_LIST_BULLET = re.compile(r"^\s*(?:[-*•]|\d+[.)])\s+")
+
+
+def _strip_markers(text: str) -> str:
+    """A statement without citation markers or a leading list bullet."""
+    text = _LIST_BULLET.sub("", CITATION_MARKER.sub("", text))
+    return " ".join(_tidy(text).split())
+
+
+def statements_citing(answer: str) -> dict[str, list[str]]:
+    """For each cited id, the answer sentences that cite it (markers removed)."""
+    from app.services.chunking_service import split_sentences
+
+    statements: dict[str, list[str]] = {}
+    for line in answer.split("\n"):
+        for sentence in split_sentences(line.strip()):
+            ids = [i for marker in CITATION_MARKER.findall(sentence) for i in parse_marker(marker)]
+            for source_id in dict.fromkeys(ids):
+                statements.setdefault(source_id, []).append(_strip_markers(sentence))
+    return statements
+
+
+def _shorten(text: str) -> str:
+    if len(text) <= MAX_EXCERPT_CHARS:
+        return text
+    return text[:MAX_EXCERPT_CHARS].rsplit(" ", 1)[0] + "…"
+
+
+def best_excerpt(source_text: str, claims: Sequence[str]) -> tuple[str, float]:
+    """The source sentence sharing most key terms with ``claims``, and that share."""
+    from app.services.bm25_service import analyze
+    from app.services.chunking_service import split_sentences
+    from app.services.text_cleaning import is_heading
+
+    # Passages keep section headings on their own line; they are not evidence.
+    prose = " ".join(line for line in source_text.split("\n") if not is_heading(line))
+    sentences = split_sentences(" ".join(prose.split())) or [source_text.strip()]
+    claim_terms = set(analyze(" ".join(claims)))
+    if not claim_terms:
+        return _shorten(sentences[0]), 0.0
+
+    scores = [len(claim_terms & set(analyze(sentence))) for sentence in sentences]
+    best = max(range(len(sentences)), key=lambda index: (scores[index], -index))
+    excerpt = sentences[best]
+    if len(excerpt) < MIN_EXCERPT_CHARS and best + 1 < len(sentences):
+        excerpt = f"{excerpt} {sentences[best + 1]}"
+    support = len(claim_terms & set(analyze(source_text))) / len(claim_terms)
+    return _shorten(excerpt), round(support, 3)
+
+
+def _letters_and_digits(text: str) -> str:
+    # Ignores whitespace, line-break hyphens and ligatures (NFKC), which differ
+    # between the cleaned passage and the raw page text.
+    import unicodedata
+
+    return re.sub(r"[^0-9a-z]", "", unicodedata.normalize("NFKC", text).lower())
+
+
+def locate_page(page_texts: dict[int, str], excerpt: str, page_start: int, page_end: int) -> int:
+    """The page of a multi-page passage on which ``excerpt`` appears."""
+    if page_start == page_end:
+        return page_start
+    key = _letters_and_digits(excerpt.rstrip("…"))
+    for length in (PAGE_MATCH_CHARS, SHORT_PAGE_MATCH_CHARS):
+        needle = key[:length]
+        if not needle:
+            break
+        for page in range(page_start, page_end + 1):
+            if needle in _letters_and_digits(page_texts.get(page, "")):
+                return page
+    return page_start
+
+
+def build_citations(
+    answer: str,
+    sources: Sequence[SourcePassage],
+    page_texts: dict[int, str] | None = None,
+) -> list[Citation]:
+    """A citation with excerpt, page and support for each source the answer cites.
+
+    ``answer`` must already be validated; ``page_texts`` maps page numbers to
+    raw text for the documents of multi-page passages.
+    """
+    by_id = {source.source_id: source for source in sources}
+    citations = []
+    for source_id, claims in statements_citing(answer).items():
+        source = by_id.get(source_id)
+        if source is None:
+            continue
+        excerpt, support = best_excerpt(source.text, claims)
+        page = locate_page(page_texts or {}, excerpt, source.page_start, source.page_end)
+        citations.append(Citation(source_id, excerpt, page, support))
+    return citations
