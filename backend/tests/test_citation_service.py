@@ -4,6 +4,7 @@ from app.services.citation_service import (
     SourcePassage,
     best_excerpt,
     build_citations,
+    citation_coverage,
     locate_page,
     parse_marker,
     statements_citing,
@@ -155,3 +156,55 @@ def test_build_citations_resolves_each_cited_source() -> None:
     assert citations[1].excerpt.startswith("FedProx tolerates partial work")
     assert citations[1].page == 2
     assert all(citation.support > 0.5 for citation in citations)
+
+
+# --- Coverage ------------------------------------------------------------------
+
+
+def test_fully_cited_answer() -> None:
+    coverage = citation_coverage(
+        "FedProx adds a proximal term to the objective [S1]. It tolerates partial work [S2]."
+    )
+    assert coverage.status == "cited"
+    assert coverage.cited_statements == 2
+    assert coverage.uncited_statements == []
+
+
+def test_partially_cited_answer_lists_the_unsupported_claims() -> None:
+    coverage = citation_coverage(
+        "FedProx adds a proximal term to the objective [S1]. "
+        "It was later adopted by every major federated learning framework."
+    )
+    assert coverage.status == "partially_cited"
+    assert coverage.uncited_statements == [
+        "It was later adopted by every major federated learning framework."
+    ]
+
+
+def test_answer_without_any_citation_is_uncited() -> None:
+    coverage = citation_coverage("FedProx converges faster than FedAvg on every benchmark tested.")
+    assert coverage.status == "uncited"
+    assert coverage.cited_statements == 0
+
+
+def test_statements_about_missing_information_need_no_citation() -> None:
+    answer = (
+        "SCAFFOLD uses control variates to correct drift [S1]. "
+        "The papers do not report the hardware used for training. "
+        "Runtime costs are not specified in the sources. "
+        "There are no details about the learning rate schedule."
+    )
+    assert citation_coverage(answer).status == "cited"
+
+
+def test_headings_list_intros_and_fragments_are_not_claims() -> None:
+    answer = (
+        "### Key findings\n"
+        "**In short**\n"
+        "The two methods differ in the following ways:\n"
+        "- FedProx adds a proximal term to the local objective [S1]\n"
+        "- SCAFFOLD corrects client drift with control variates [S2]"
+    )
+    coverage = citation_coverage(answer)
+    assert coverage.status == "cited"
+    assert coverage.cited_statements == 2

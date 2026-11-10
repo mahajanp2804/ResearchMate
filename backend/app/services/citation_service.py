@@ -14,6 +14,7 @@ module checks those markers in code rather than trusting them:
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Literal
 
 # A bracketed list of source ids: [S1], [S1, S3], [S2; S4], [S1-S3], [s2].
 CITATION_MARKER = re.compile(
@@ -202,3 +203,68 @@ def build_citations(
         page = locate_page(page_texts or {}, excerpt, source.page_start, source.page_end)
         citations.append(Citation(source_id, excerpt, page, support))
     return citations
+
+
+# --- Coverage: statements without citations ---------------------------------
+
+CoverageStatus = Literal["cited", "partially_cited", "uncited"]
+
+# Statements that report missing information are not claims needing a source,
+# e.g. "The papers do not report the hardware used."
+_ABSENCE = re.compile(
+    r"\b(?:do|does|did)\s+not\s+(?:mention|report|discuss|cover|provide|specify|describe|"
+    r"state|include|address|compare|evaluate|give|say)"
+    r"|\bnot\s+(?:mentioned|reported|discussed|covered|specified|described|stated|provided|"
+    r"addressed|available)"
+    r"|\bno\s+(?:information|details?|mention|data)\b"
+    r"|\b(?:unclear|unknown)\s+from\s+the\s+(?:sources|papers)",
+    re.IGNORECASE,
+)
+# Shorter fragments ("**Key findings**", "In short:") are not treated as claims.
+MIN_CLAIM_WORDS = 5
+
+
+@dataclass(frozen=True)
+class Coverage:
+    status: CoverageStatus
+    cited_statements: int
+    # Statements that make a claim without citing any source.
+    uncited_statements: list[str] = field(default_factory=list)
+
+
+def citation_coverage(answer: str) -> Coverage:
+    """How much of a (validated) answer is backed by citations.
+
+    A heuristic for warning the reader, not a proof: a sentence is counted as
+    cited when it contains a marker, and as an uncited claim when it has none
+    and is not a heading, a list introduction, a short fragment or a statement
+    that information is missing.
+    """
+    from app.services.chunking_service import split_sentences
+
+    cited = 0
+    uncited: list[str] = []
+    for line in answer.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        for sentence in split_sentences(line):
+            if CITATION_MARKER.search(sentence):
+                cited += 1
+                continue
+            statement = _strip_markers(sentence)
+            if (
+                statement.endswith(":")
+                or len(re.findall(r"[A-Za-z0-9]+", statement)) < MIN_CLAIM_WORDS
+                or _ABSENCE.search(statement)
+            ):
+                continue
+            uncited.append(statement)
+
+    if cited == 0:
+        status: CoverageStatus = "uncited"
+    elif uncited:
+        status = "partially_cited"
+    else:
+        status = "cited"
+    return Coverage(status=status, cited_statements=cited, uncited_statements=uncited)
