@@ -112,6 +112,12 @@ def test_excerpt_for_an_unrelated_claim_has_low_support() -> None:
     assert support < 0.3
 
 
+def test_paper_title_running_into_the_first_sentence_is_dropped() -> None:
+    text = "Variance Paper Clients train locally on private data and share only updates."
+    excerpt, _ = best_excerpt(text, ["Clients train locally"], title="Variance Paper")
+    assert excerpt == "Clients train locally on private data and share only updates."
+
+
 def test_short_best_sentence_is_extended_and_long_ones_shortened() -> None:
     short = "See Table 2. Accuracy reaches 0.95 on MNIST with 100 clients in every setting."
     excerpt, _ = best_excerpt(short, ["Table 2"])

@@ -88,6 +88,8 @@ def test_answer_turn_shows_how_a_follow_up_was_understood() -> None:
         REFUSAL,
         REFUSAL.upper(),
         "  " + REFUSAL.replace("couldn't", "couldn’t").rstrip(".") + "  ",
+        REFUSAL + " [S1]",
+        REFUSAL.rstrip(".") + " [S2, S3].",
     ],
 )
 def test_refusal_detection_tolerates_formatting(answer: str) -> None:

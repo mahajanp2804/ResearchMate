@@ -96,6 +96,9 @@ class SourcePassage:
     text: str
     page_start: int
     page_end: int
+    document_id: str = ""
+    # The paper's title, which can run into the first sentence of page 1.
+    title: str = ""
 
 
 @dataclass(frozen=True)
@@ -138,7 +141,7 @@ def _shorten(text: str) -> str:
     return text[:MAX_EXCERPT_CHARS].rsplit(" ", 1)[0] + "…"
 
 
-def best_excerpt(source_text: str, claims: Sequence[str]) -> tuple[str, float]:
+def best_excerpt(source_text: str, claims: Sequence[str], title: str = "") -> tuple[str, float]:
     """The source sentence sharing most key terms with ``claims``, and that share."""
     from app.services.bm25_service import analyze
     from app.services.chunking_service import split_sentences
@@ -146,7 +149,11 @@ def best_excerpt(source_text: str, claims: Sequence[str]) -> tuple[str, float]:
 
     # Passages keep section headings on their own line; they are not evidence.
     prose = " ".join(line for line in source_text.split("\n") if not is_heading(line))
-    sentences = split_sentences(" ".join(prose.split())) or [source_text.strip()]
+    prose = " ".join(prose.split())
+    # A title line has no full stop, so it would merge into the first sentence.
+    if title and prose.startswith(title):
+        prose = prose[len(title) :].lstrip()
+    sentences = split_sentences(prose) or [source_text.strip()]
     claim_terms = set(analyze(" ".join(claims)))
     if not claim_terms:
         return _shorten(sentences[0]), 0.0
@@ -186,12 +193,12 @@ def locate_page(page_texts: dict[int, str], excerpt: str, page_start: int, page_
 def build_citations(
     answer: str,
     sources: Sequence[SourcePassage],
-    page_texts: dict[int, str] | None = None,
+    page_texts: dict[str, dict[int, str]] | None = None,
 ) -> list[Citation]:
     """A citation with excerpt, page and support for each source the answer cites.
 
-    ``answer`` must already be validated; ``page_texts`` maps page numbers to
-    raw text for the documents of multi-page passages.
+    ``answer`` must already be validated. ``page_texts`` maps a document id to
+    its raw page texts; it is only needed for passages that span pages.
     """
     by_id = {source.source_id: source for source in sources}
     citations = []
@@ -199,8 +206,9 @@ def build_citations(
         source = by_id.get(source_id)
         if source is None:
             continue
-        excerpt, support = best_excerpt(source.text, claims)
-        page = locate_page(page_texts or {}, excerpt, source.page_start, source.page_end)
+        excerpt, support = best_excerpt(source.text, claims, source.title)
+        pages = (page_texts or {}).get(source.document_id, {})
+        page = locate_page(pages, excerpt, source.page_start, source.page_end)
         citations.append(Citation(source_id, excerpt, page, support))
     return citations
 

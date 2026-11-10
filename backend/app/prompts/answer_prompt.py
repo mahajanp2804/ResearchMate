@@ -13,6 +13,7 @@ Grounding and prompt-injection defences:
   this one.
 """
 
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
@@ -84,10 +85,18 @@ def build_answer_turns(
     return [ChatTurn("user", f"Sources:\n\n{format_sources(chunks)}\n\n{asked}")]
 
 
+_CITATION_MARKER = re.compile(r"\[\s*S\d+[^\]]*\]", re.IGNORECASE)
+
+
 def is_refusal(answer: str) -> bool:
-    """True if the model answered with the refusal sentence (ignoring spacing and case)."""
+    """True if the model answered with the refusal sentence.
+
+    Ignores spacing, case, curly apostrophes and any citation markers the
+    model attached to it.
+    """
 
     def normalise(text: str) -> str:
-        return " ".join(text.lower().replace("’", "'").split()).rstrip(".")
+        text = _CITATION_MARKER.sub("", text).lower().replace("’", "'")
+        return " ".join(text.split()).rstrip(".").strip()
 
     return normalise(answer) == normalise(REFUSAL)
