@@ -69,6 +69,10 @@ def test_answer_is_grounded_and_cited(client: TestClient) -> None:
     assert message["details"]["outcome"] == "answered"
     assert "proximal" in message["content"].lower()
     assert "[S" in message["content"]
+    # Gemini's citations survive validation and resolve to real excerpts.
+    assert message["details"]["citation_status"] in ("cited", "partially_cited")
+    cited = [source for source in message["sources"] if source["cited"]]
+    assert cited and all(source["excerpt"] for source in cited)
 
 
 def test_instructions_inside_a_paper_are_not_obeyed(client: TestClient) -> None:
