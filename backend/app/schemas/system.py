@@ -30,6 +30,16 @@ class RetrievalInfo(BaseModel):
     min_rerank_score: float | None
     final_context_chunks: int
     max_context_tokens: int
+    # Guaranteed context slots per paper for questions about a few selected papers.
+    min_passages_per_paper: int
+
+
+class AnalysisInfo(BaseModel):
+    """Paper profiles, behind summaries and comparisons."""
+
+    profile_passages_per_aspect: int
+    profile_max_context_tokens: int
+    max_compare_papers: int
 
 
 class LLMInfo(BaseModel):
@@ -61,6 +71,7 @@ class SystemInfo(BaseModel):
     max_pages_per_document: int
     chunking: ChunkingInfo
     retrieval: RetrievalInfo
+    analysis: AnalysisInfo
     llm: LLMInfo
 
 

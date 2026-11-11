@@ -4,6 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.dependencies import DbSession, IngestionDep, SettingsDep
 from app.schemas.system import (
+    AnalysisInfo,
     ChunkingInfo,
     DashboardStats,
     HealthResponse,
@@ -70,6 +71,12 @@ def system_info(settings: SettingsDep, ingestion: IngestionDep) -> SystemInfo:
             min_rerank_score=settings.min_rerank_score,
             final_context_chunks=settings.final_context_chunks,
             max_context_tokens=settings.max_context_tokens,
+            min_passages_per_paper=settings.min_passages_per_paper,
+        ),
+        analysis=AnalysisInfo(
+            profile_passages_per_aspect=settings.profile_passages_per_aspect,
+            profile_max_context_tokens=settings.profile_max_context_tokens,
+            max_compare_papers=settings.max_compare_papers,
         ),
         llm=LLMInfo(
             provider=settings.llm_provider,
