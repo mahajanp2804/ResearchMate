@@ -1,4 +1,5 @@
 import {
+  BookOpenText,
   ChevronDown,
   CircleAlert,
   DatabaseZap,
@@ -15,7 +16,7 @@ import type { DocumentSummary } from '../types/api'
 import { needsIndexing } from '../utils/documents'
 import { cn, formatBytes, formatDate, pluralize } from '../utils/format'
 import { DocumentStatusBadge } from './StatusBadge'
-import { Button } from './ui/Button'
+import { Button, ButtonLink } from './ui/Button'
 import { Card } from './ui/Card'
 import { Spinner } from './ui/Feedback'
 
@@ -105,6 +106,12 @@ export function DocumentCard({
                 )}
                 {processingFailed ? 'Retry processing' : 'Index now'}
               </Button>
+            )}
+            {document.indexing_status === 'indexed' && (
+              <ButtonLink variant="secondary" size="sm" to={`/papers/${document.id}/summary`}>
+                <BookOpenText className="size-3.5" aria-hidden />
+                Summary
+              </ButtonLink>
             )}
             {document.chunk_count > 0 && (
               <Button variant="secondary" size="sm" onClick={() => onViewPassages(document)}>

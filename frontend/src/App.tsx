@@ -8,6 +8,7 @@ import Documents from './pages/Documents'
 import Evaluation from './pages/Evaluation'
 import Insights from './pages/Insights'
 import NotFound from './pages/NotFound'
+import PaperSummary from './pages/PaperSummary'
 import Settings from './pages/Settings'
 
 const router = createBrowserRouter([
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'papers', element: <Documents /> },
+      { path: 'papers/:documentId/summary', element: <PaperSummary /> },
       { path: 'assistant', element: <Assistant /> },
       { path: 'comparison', element: <Comparison /> },
       { path: 'insights', element: <Insights /> },
