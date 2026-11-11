@@ -2,6 +2,7 @@ import type {
   ApiErrorBody,
   ChatResponse,
   ChunkListResponse,
+  ComparisonResponse,
   ContextResponse,
   ConversationDetail,
   ConversationListResponse,
@@ -9,6 +10,7 @@ import type {
   DocumentDetail,
   DocumentListResponse,
   HealthResponse,
+  PaperProfile,
   ReindexResponse,
   SearchRequest,
   SearchResponse,
@@ -165,6 +167,22 @@ export const api = {
   deleteConversation: (conversationId: string) =>
     request<null>(`/api/chat/conversations/${encodeURIComponent(conversationId)}`, {
       method: 'DELETE',
+    }),
+  /** The saved summary of a paper; 404 (`summary_not_found`) if it has none yet. */
+  getSummary: (documentId: string, signal?: AbortSignal) =>
+    request<PaperProfile>(`/api/research/summaries/${encodeURIComponent(documentId)}`, { signal }),
+  /** Generate (or return the saved) nine-section summary; `refresh` regenerates it. */
+  summarize: (documentId: string, refresh = false) =>
+    request<PaperProfile>(
+      `/api/research/summarize/${encodeURIComponent(documentId)}${refresh ? '?refresh=true' : ''}`,
+      { method: 'POST' },
+    ),
+  /** Compare papers aspect by aspect, in the given column order. */
+  compare: (documentIds: string[], refresh = false) =>
+    request<ComparisonResponse>('/api/research/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document_ids: documentIds, refresh }),
     }),
   /** URL of the original PDF, optionally opened at a 1-based page. */
   documentFileUrl: (documentId: string, page?: number) =>

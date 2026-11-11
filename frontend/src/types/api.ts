@@ -50,6 +50,14 @@ export interface SystemInfo {
     min_rerank_score: number | null
     final_context_chunks: number
     max_context_tokens: number
+    /** Guaranteed context slots per paper for questions about a few selected papers. */
+    min_passages_per_paper: number
+  }
+  /** Paper profiles, behind summaries and comparisons. */
+  analysis: {
+    profile_passages_per_aspect: number
+    profile_max_context_tokens: number
+    max_compare_papers: number
   }
   llm: {
     provider: string
@@ -249,6 +257,8 @@ export interface ContextResponse {
 
 // --- Chat --------------------------------------------------------------------
 
+export type CitationStatus = 'cited' | 'partially_cited' | 'uncited'
+
 /** A passage given to the LLM, numbered the way the answer cites it. */
 export interface ChatSource {
   source_id: string
@@ -283,7 +293,7 @@ export interface AnswerDetails {
   searched_document_count: number
   skipped_document_ids: string[]
   /** null for refusals (and for answers saved before citations were checked). */
-  citation_status: 'cited' | 'partially_cited' | 'uncited' | null
+  citation_status: CitationStatus | null
   /** Ids the model cited that were not among the sources; removed from the answer. */
   invalid_citation_ids: string[]
   /** Claims in the answer that cite no source. */
@@ -321,4 +331,60 @@ export interface ChatResponse {
   conversation: ConversationSummary
   user_message: ChatMessage
   assistant_message: ChatMessage
+}
+
+// --- Summaries and comparisons -----------------------------------------------
+
+/** A source an aspect cites, with the sentence that supports it. */
+export interface ProfileCitation {
+  source_id: string
+  excerpt: string
+  /** The page the excerpt is on (exact even when the passage spans pages). */
+  page: number
+  support: number
+}
+
+/** A passage of the paper that a summary or comparison was built from. */
+export interface ProfileSource {
+  source_id: string
+  chunk_id: number
+  page_start: number
+  page_end: number
+  section: string | null
+  text: string
+}
+
+/** A summary section or a comparison cell. */
+export interface ProfileAspect {
+  key: string
+  label: string
+  /** `not_found`: the paper's retrieved passages don't state this; `text` is null. */
+  status: 'found' | 'not_found'
+  text: string | null
+  citations: ProfileCitation[]
+  citation_status: CitationStatus | null
+  /** Ids the model cited that were not among the sources; removed from the text. */
+  invalid_citation_ids: string[]
+  /** Claims in the text that cite no source. */
+  uncited_statements: string[]
+}
+
+/** One paper's aspects: its summary sections, or its column of a comparison. */
+export interface PaperProfile {
+  document_id: string
+  document_title: string
+  aspects: ProfileAspect[]
+  sources: ProfileSource[]
+  model: string
+  generated_at: string
+  /** True when it was saved earlier and no LLM call was made. */
+  cached: boolean
+  truncated: boolean
+}
+
+export interface ComparisonResponse {
+  /** The rows, in order. */
+  aspects: { key: string; label: string }[]
+  /** One column per paper, in the requested order. */
+  papers: PaperProfile[]
 }
