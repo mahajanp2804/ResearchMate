@@ -193,6 +193,8 @@ def test_saved_profiles_are_reused(tmp_path: Path) -> None:
         columns = compare(client, [papers["fedprox"], papers["scaffold"]]).json()["papers"]
         assert [column["cached"] for column in columns] == [True, True]
         assert len(app.state.test_llm.calls_of("profile")) == 2
+        # Reopening a saved comparison is not logged again.
+        assert len(activity(app, ActivityType.COMPARISON_RUN)) == 1
 
         refreshed = compare(client, [papers["fedprox"], papers["scaffold"]], refresh=True)
         assert [column["cached"] for column in refreshed.json()["papers"]] == [False, False]

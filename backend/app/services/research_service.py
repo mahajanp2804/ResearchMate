@@ -155,7 +155,10 @@ def compare(
         db.commit()
         raise failures[0]
 
-    record_activity(db, ActivityType.COMPARISON_RUN, _comparison_description(documents))
+    # Logged when papers were read, like summaries; reopening a comparison
+    # whose profiles are all saved (e.g. reloading the page) is not.
+    if built:
+        record_activity(db, ActivityType.COMPARISON_RUN, _comparison_description(documents))
     db.commit()
     return [
         (document, built.get(document.id) or saved[document.id], document.id not in built)
