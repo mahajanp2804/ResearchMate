@@ -151,7 +151,7 @@ function SummaryView({ documentId }: { documentId: string }) {
       </Link>
 
       <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium text-accent-text">Paper summary</p>
             <h2 className="mt-1 text-lg leading-snug font-semibold text-fg">
