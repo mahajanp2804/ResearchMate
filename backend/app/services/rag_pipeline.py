@@ -18,12 +18,10 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.exceptions import UpstreamServiceError
-from app.models import DocumentPage
 from app.prompts.answer_prompt import (
     ANSWER_SYSTEM_PROMPT,
     REFUSAL,
@@ -45,6 +43,7 @@ from app.services.retrieval_service import (
     RetrievedChunk,
     SearchScope,
     normalize_query,
+    page_texts_for,
 )
 from app.utils.logging import get_logger
 
@@ -167,7 +166,7 @@ class RagPipeline:
                 )
                 for n, chunk in enumerate(sources, start=1)
             ]
-            citations = build_citations(check.text, passages, self._page_texts(db, sources))
+            citations = build_citations(check.text, passages, page_texts_for(db, sources))
             coverage = citation_coverage(check.text)
             if check.invalid_ids:
                 logger.info("Removed citations to unknown sources: %s", check.invalid_ids)
@@ -187,21 +186,6 @@ class RagPipeline:
             invalid_citation_ids=check.invalid_ids,
             coverage=coverage,
         )
-
-    @staticmethod
-    def _page_texts(db: Session, sources: Sequence[RetrievedChunk]) -> dict[str, dict[int, str]]:
-        """Raw page text for passages spanning pages, to pin citations to one page."""
-        spans = [chunk for chunk in sources if chunk.page_start != chunk.page_end]
-        texts: dict[str, dict[int, str]] = {}
-        for chunk in spans:
-            rows = db.execute(
-                select(DocumentPage.page_number, DocumentPage.text).where(
-                    DocumentPage.document_id == chunk.document_id,
-                    DocumentPage.page_number.between(chunk.page_start, chunk.page_end),
-                )
-            )
-            texts.setdefault(chunk.document_id, {}).update(dict(rows.all()))
-        return texts
 
     def _rewrite(self, question: str, history: Sequence[ChatTurn]) -> str:
         try:

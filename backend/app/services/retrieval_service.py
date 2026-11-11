@@ -14,7 +14,7 @@ candidates at any later stage.
 """
 
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
 from sqlalchemy import select
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.exceptions import InvalidInputError
-from app.models import Chunk, Document, IndexingStatus
+from app.models import Chunk, Document, DocumentPage, IndexingStatus
 from app.services.bm25_service import BM25Service
 from app.services.context_selection import ContextSelection, select_context
 from app.services.hybrid_retriever import reciprocal_rank_fusion
@@ -80,6 +80,25 @@ class RetrievedChunk:
     token_count: int
     # Where the chunk ranked in each stage that saw it, e.g. {"dense": 3, "bm25": 1}.
     source_ranks: dict[str, int] = field(default_factory=dict)
+
+
+def page_texts_for(db: Session, chunks: Sequence[RetrievedChunk]) -> dict[str, dict[int, str]]:
+    """Raw page texts of the passages that span pages, by document and page number.
+
+    Citation checks use them to pin an excerpt to the exact page it is on.
+    """
+    texts: dict[str, dict[int, str]] = {}
+    for chunk in chunks:
+        if chunk.page_start == chunk.page_end:
+            continue
+        rows = db.execute(
+            select(DocumentPage.page_number, DocumentPage.text).where(
+                DocumentPage.document_id == chunk.document_id,
+                DocumentPage.page_number.between(chunk.page_start, chunk.page_end),
+            )
+        )
+        texts.setdefault(chunk.document_id, {}).update(dict(rows.all()))
+    return texts
 
 
 class RetrievalService:
