@@ -30,7 +30,7 @@ acceptance criteria each phase must meet before the next one starts.
 │  Generation: prompts/ → llm_service (provider interface; Gemini first)            │
 │              → citation_service (validate [S#] markers against given sources)     │
 │                                                                                   │
-│  Analysis:   summarization · comparison · research_gap  (all built on retrieval)  │
+│  Analysis:   paper profiles (summary + comparison views) · research_gap           │
 │  Evaluation: dataset → per-config retrieval runs → P@K / R@K / MRR                │
 │              + optional LLM-judged faithfulness / relevance (kept separate)       │
 ├───────────────────────────────────────────────────────────────────────────────────┤
@@ -66,6 +66,12 @@ acceptance criteria each phase must meet before the next one starts.
 | BM25 IDF | Lucene's `log(1 + (N − n + 0.5)/(n + 0.5))` instead of Okapi's | Okapi IDF is zero or negative for terms in half the chunks, which in a small library drops relevant passages. |
 | BM25 cache | In-memory index rebuilt only when `(count, sum, max)` of searchable chunk ids changes | Stateless invalidation with no hooks on every write; reliable because chunk ids are never reused. |
 | What is searchable | Only papers with `indexing_status = indexed`, for both retrievers | "Searchable" in the UI means exactly what search uses; a half-indexed paper never appears in one method but not the other. |
+| Paper profiles *(Phase 9)* | Summaries and comparisons are two views of one saved **profile** per paper: 11 aspects (the 9 summary sections and 10 comparison rows overlap), each with its own retrieval question searched within that paper, then **one** LLM call that fills every aspect as JSON or marks it not found | One model call per paper instead of one per section or cell; a paper's summary and its comparison column can never contradict each other; comparing papers that were already summarised costs nothing; and every comparison cell cites its own paper by construction, because each call only sees that paper's passages. |
+| Profile evidence | Every aspect's best passage is kept before any aspect's second (3 per aspect, 8,000-token budget), then the passages are put back in reading order | One aspect with many matching passages (e.g. results) cannot crowd out a rare one (e.g. limitations). A long paper's details beyond these passages are reported as not found, which the UI words as "not found in the passages retrieved". |
+| Structured output | The provider takes an optional JSON Schema (Gemini `response_json_schema`); the reply is still parsed and validated in code | Constrained output makes the shape reliable, but a missing or malformed aspect is treated as not found and an unreadable reply is a clear `llm_bad_output` error, never a partly invented profile. |
+| Profile cache | One row per paper, keyed by a signature of the profile prompt version, chunking signature and embedding model | Re-processing a paper or changing the prompt makes old profiles stale automatically; `refresh` rebuilds on request. |
+| Comparisons | Retrieval for each paper runs in the request thread; only the LLM calls run in parallel (up to 4) | The database session and FAISS thread settings stay in one thread. If one paper fails, the others' profiles are still saved, so a retry only redoes the failed one. |
+| Questions about selected papers *(Phase 9)* | When a question is limited to 2+ selected papers, each paper is searched separately and gets `MIN_PASSAGES_PER_PAPER` (2) guaranteed context slots; the rest go to the best passages overall | Measured in a test: without it, a paper whose wording matches the question well took every slot and the other paper was never seen, so "compare the results of these papers" could not be answered. The evidence threshold still applies to guaranteed passages. |
 
 ### Decision (Phase 3): chunk size vs. embedding window
 
@@ -97,11 +103,11 @@ ResearchMate/
 │   │   ├── database.py           # engine, session factory, Base, get_db
 │   │   ├── exceptions.py         # domain errors mapped to HTTP responses
 │   │   ├── models/               # SQLAlchemy ORM
-│   │   │   ├── document.py  page.py  chunk.py  conversation.py  evaluation.py  activity.py
+│   │   │   ├── document.py  page.py  chunk.py  conversation.py  profile.py  evaluation.py  activity.py
 │   │   ├── schemas/              # Pydantic API contracts
 │   │   │   ├── common.py  system.py  document.py  retrieval.py  chat.py  research.py  evaluation.py
 │   │   ├── routers/
-│   │   │   ├── system.py  documents.py  retrieval.py  chat.py  research.py  comparison.py  evaluation.py
+│   │   │   ├── system.py  documents.py  retrieval.py  chat.py  research.py  evaluation.py
 │   │   ├── services/
 │   │   │   ├── document_service.py    # upload, de-duplication, listing, deletion
 │   │   │   ├── ingestion_service.py   # chunk → embed → index for stored documents
@@ -109,10 +115,12 @@ ResearchMate/
 │   │   │   ├── embedding_service.py  vector_store.py  bm25_service.py  retrieval_service.py
 │   │   │   ├── hybrid_retriever.py  reranker.py  context_selection.py  rag_pipeline.py
 │   │   │   ├── llm_service.py  citation_service.py
-│   │   │   ├── summarization_service.py  comparison_service.py  research_gap_service.py
+│   │   │   ├── paper_profile_service.py  # per-paper cited aspects behind summaries + comparisons
+│   │   │   ├── research_service.py       # summaries and comparisons on top of profiles
+│   │   │   ├── research_gap_service.py
 │   │   │   └── evaluation_service.py  activity_service.py  stats_service.py  chat_service.py
 │   │   ├── prompts/
-│   │   │   ├── answer_prompt.py  rewrite_prompt.py  summary_prompt.py  comparison_prompt.py  research_gap_prompt.py
+│   │   │   ├── answer_prompt.py  rewrite_prompt.py  profile_prompt.py  research_gap_prompt.py
 │   │   └── utils/
 │   │       ├── logging.py  file_validation.py
 │   ├── evaluation/datasets/      # curated evaluation questions (JSON)
@@ -230,6 +238,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 ### Phase 9 — Summarisation & multi-paper comparison
 - Nine-section structured summary per paper, each section from targeted retrieval with citations or an explicit "not found"; cached per document.
 - `POST /api/research/compare`: aspect × paper matrix with per-cell citations, "not reported" instead of guesses, follow-up questions scoped to the compared papers.
+- **Status: done.** `POST /api/research/summarize/{id}` (and `GET /api/research/summaries/{id}` for the saved one) returns nine cited sections; `POST /api/research/compare` returns ten aspects for 2–5 papers. Both come from saved paper profiles (see *Paper profiles* above), are validated per aspect like answers (invented citations removed, uncited claims flagged, excerpt and exact page per citation) and say "not found" / "Not reported" instead of guessing. Follow-up questions use the normal grounded pipeline limited to the compared papers, which now gives each selected paper a share of the context. The UI has a summary page per paper and a Paper Comparison page with a table, cited passages and follow-up questions. Verified offline with a scripted model and in the browser with real retrieval and a stand-in model; the opt-in live test (`pytest -m llm`) covers Gemini's JSON output once a key is set.
 
 ### Phase 10 — Research gap analysis
 - `POST /api/research/gaps`: explicit limitations → cross-paper patterns → inferred opportunities, each with citations and a scope disclaimer.
