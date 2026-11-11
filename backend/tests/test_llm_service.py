@@ -92,6 +92,25 @@ def test_per_call_overrides() -> None:
     assert (config.temperature, config.max_output_tokens) == (0.0, 200)
 
 
+def test_json_schema_requests_structured_output() -> None:
+    schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+    gemini, client = provider(response('{"answer": "a proximal term"}'))
+    result = gemini.generate(
+        system_prompt="Extract.", turns=[ChatTurn("user", "q")], json_schema=schema
+    )
+    config = client.models.requests[0]["config"]
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema == schema
+    assert result.text == '{"answer": "a proximal term"}'
+
+
+def test_plain_text_by_default() -> None:
+    gemini, client = provider(response("text"))
+    generate(gemini)
+    config = client.models.requests[0]["config"]
+    assert config.response_mime_type is None and config.response_json_schema is None
+
+
 def test_response_is_parsed_with_usage() -> None:
     gemini, _ = provider(response("  FedProx adds a proximal term [S1].  "))
     result = generate(gemini)

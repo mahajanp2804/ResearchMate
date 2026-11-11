@@ -12,7 +12,7 @@ error message or a log line.
 import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from app.config import Settings
 from app.exceptions import (
@@ -54,7 +54,11 @@ class LLMProvider(Protocol):
         turns: Sequence[ChatTurn],
         temperature: float | None = None,
         max_output_tokens: int | None = None,
-    ) -> LLMResponse: ...
+        json_schema: dict[str, Any] | None = None,
+    ) -> LLMResponse:
+        """Generate a reply. With ``json_schema`` the reply is a JSON document
+        following that (JSON Schema) shape; callers still validate it."""
+        ...
 
 
 # --- Gemini --------------------------------------------------------------------
@@ -104,6 +108,7 @@ class GeminiProvider:
         turns: Sequence[ChatTurn],
         temperature: float | None = None,
         max_output_tokens: int | None = None,
+        json_schema: dict[str, Any] | None = None,
     ) -> LLMResponse:
         from google.genai import errors, types
 
@@ -119,6 +124,10 @@ class GeminiProvider:
             temperature=self._temperature if temperature is None else temperature,
             max_output_tokens=max_output_tokens or self._max_output_tokens,
         )
+        if json_schema is not None:
+            # Gemini's structured output: the reply is constrained to this schema.
+            config.response_mime_type = "application/json"
+            config.response_json_schema = json_schema
         try:
             response = self._client.models.generate_content(
                 model=self.model, contents=contents, config=config

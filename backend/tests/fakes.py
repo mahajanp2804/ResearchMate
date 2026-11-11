@@ -115,7 +115,9 @@ class ScriptedLLM:
         self.rewrite = rewrite
         self.calls: list[dict] = []
 
-    def generate(self, *, system_prompt, turns, temperature=None, max_output_tokens=None):
+    def generate(
+        self, *, system_prompt, turns, temperature=None, max_output_tokens=None, json_schema=None
+    ):
         from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT
         from app.services.llm_service import LLMResponse
 
