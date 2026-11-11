@@ -84,3 +84,17 @@ def test_instructions_inside_a_paper_are_not_obeyed(client: TestClient) -> None:
 def test_unanswerable_question_is_refused(client: TestClient) -> None:
     message = answer(client, "Which GPU model was used to train the networks?")
     assert message["content"] == REFUSAL
+
+
+def test_summary_is_structured_cited_and_honest_about_gaps(client: TestClient) -> None:
+    papers = client.get("/api/documents").json()["items"]
+    paper = next(item for item in papers if item["title"] == "Federated Optimization")
+    response = client.post(f"/api/research/summarize/{paper['id']}")
+    assert response.status_code == 200, response.text
+    sections = {section["key"]: section for section in response.json()["aspects"]}
+
+    datasets = sections["datasets"]
+    assert datasets["status"] == "found" and datasets["citations"]
+    assert "MNIST" in datasets["text"]
+    # The paper says nothing about future work, so it must not be invented.
+    assert sections["future_work"]["status"] == "not_found"
