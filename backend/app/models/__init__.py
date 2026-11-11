@@ -9,6 +9,7 @@ from app.models.evaluation import (
     EvaluationRunStatus,
 )
 from app.models.page import DocumentPage
+from app.models.profile import PaperProfile
 
 __all__ = [
     "ActivityEvent",
@@ -24,5 +25,6 @@ __all__ = [
     "IndexingStatus",
     "Message",
     "MessageRole",
+    "PaperProfile",
     "ProcessingStatus",
 ]

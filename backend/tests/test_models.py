@@ -14,6 +14,7 @@ from app.models import (
     IndexingStatus,
     Message,
     MessageRole,
+    PaperProfile,
     ProcessingStatus,
 )
 
@@ -80,6 +81,18 @@ def test_deleting_document_cascades_to_chunks_at_database_level(db_session: Sess
     db_session.connection().exec_driver_sql("DELETE FROM documents")
     db_session.commit()
     assert db_session.scalars(select(Chunk)).all() == []
+
+
+def test_deleting_document_deletes_its_profile(db_session: Session) -> None:
+    document = make_document()
+    db_session.add(document)
+    db_session.flush()
+    db_session.add(PaperProfile(document_id=document.id, signature="s", model="m", content={}))
+    db_session.commit()
+
+    db_session.delete(document)  # the ORM delete the API uses
+    db_session.commit()
+    assert db_session.scalars(select(PaperProfile)).all() == []
 
 
 def test_deleting_document_keeps_activity_history(db_session: Session) -> None:
