@@ -97,6 +97,15 @@ class Settings(BaseSettings):
     # Earlier messages of a conversation used to resolve follow-up questions.
     llm_history_messages: int = Field(default=6, ge=0, le=20)
 
+    # --- Summaries and comparisons -------------------------------------------
+    # A paper's profile (behind its summary and comparisons) retrieves this
+    # many passages for each aspect (objective, datasets, results, ...)...
+    profile_passages_per_aspect: int = Field(default=3, gt=0, le=10)
+    # ...within this budget for the whole profile (11 aspects).
+    profile_max_context_tokens: int = Field(default=8000, gt=0)
+    # Papers per comparison; each needs its own profile (one LLM call, cached).
+    max_compare_papers: int = Field(default=5, ge=2, le=10)
+
     @model_validator(mode="after")
     def _validate(self) -> "Settings":
         if self.chunk_overlap_tokens >= self.chunk_size_tokens:
