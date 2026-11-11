@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     min_rerank_score: float | None = None
     final_context_chunks: int = Field(default=8, gt=0)
     max_context_tokens: int = Field(default=6000, gt=0)
+    # When a question is limited to a few selected papers (e.g. a comparison),
+    # each paper is searched on its own and its best passages get this many
+    # guaranteed context slots (fewer if the slots run out); the rest go to
+    # the best passages overall. Without it, one paper that matches the
+    # question's wording well can take every slot. 0 turns it off.
+    min_passages_per_paper: int = Field(default=2, ge=0)
 
     # --- LLM ---------------------------------------------------------------
     llm_provider: Literal["gemini"] = "gemini"

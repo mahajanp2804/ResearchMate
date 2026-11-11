@@ -228,20 +228,66 @@ class RetrievalService:
 
         With reranking on, the optional ``min_rerank_score`` gate applies to
         cross-encoder scores. RRF scores are not relevance estimates, so no
-        score gate is applied without the reranker.
+        score gate is applied without the reranker. A question limited to a
+        few selected papers gives each of them a share of the context.
         """
         settings = self._settings
-        if settings.reranker_enabled:
-            candidates = self.reranked_search(db, query, settings.rerank_candidates, scope)
-            min_score = settings.min_rerank_score
-        else:
-            candidates = self.hybrid_search(db, query, settings.rerank_candidates, scope)
-            min_score = None
+        search = self.reranked_search if settings.reranker_enabled else self.hybrid_search
+        min_score = settings.min_rerank_score if settings.reranker_enabled else None
+        papers = sorted(scope.document_ids or ())
+        if settings.min_passages_per_paper and 2 <= len(papers) <= settings.final_context_chunks:
+            return self._balanced_context(db, query, scope, papers, search, min_score)
+
+        candidates = search(db, query, settings.rerank_candidates, scope)
         return select_context(
             candidates,
             max_chunks=settings.final_context_chunks,
             max_tokens=settings.max_context_tokens,
             min_score=min_score,
+        )
+
+    def _balanced_context(
+        self,
+        db: Session,
+        query: str,
+        scope: SearchScope,
+        papers: list[str],
+        search: Callable[[Session, str, int, SearchScope], list[RetrievedChunk]],
+        min_score: float | None,
+    ) -> ContextSelection:
+        """Context in which every selected paper is represented by its best passages.
+
+        Each paper is searched separately, so one paper's strong matches
+        cannot push another out of the candidates. Each paper's top passages
+        are considered first (round robin), then all remaining candidates by
+        score. Cross-encoder scores for the same question are comparable
+        across papers, so the kept passages are finally ordered by score.
+        """
+        settings = self._settings
+        per_paper = [
+            search(
+                db,
+                query,
+                settings.rerank_candidates,
+                replace(scope, document_ids=frozenset({paper}), skipped_document_ids=()),
+            )
+            for paper in papers
+        ]
+        quota = min(settings.min_passages_per_paper, settings.final_context_chunks // len(papers))
+        guaranteed = [hits[i] for i in range(quota) for hits in per_paper if i < len(hits)]
+        others = sorted(
+            (hit for hits in per_paper for hit in hits[quota:]), key=lambda hit: -hit.score
+        )
+        selection = select_context(
+            guaranteed + others,
+            max_chunks=settings.final_context_chunks,
+            max_tokens=settings.max_context_tokens,
+            min_score=min_score,
+        )
+        ordered = sorted(selection.chunks, key=lambda chunk: -chunk.score)
+        return replace(
+            selection,
+            chunks=[replace(chunk, rank=rank) for rank, chunk in enumerate(ordered, start=1)],
         )
 
     # --- Hydration ---------------------------------------------------------
