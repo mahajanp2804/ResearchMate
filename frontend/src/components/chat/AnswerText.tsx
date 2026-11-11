@@ -6,9 +6,11 @@ interface AnswerTextProps {
   /** Source ids the answer may cite, e.g. ["S1", "S2"]. */
   sourceIds: string[]
   onCite: (sourceId: string) => void
+  /** Text shown on a citation chip; the source id by default. */
+  chipLabel?: (sourceId: string) => string
 }
 
-function Inline({ text, sourceIds, onCite }: AnswerTextProps) {
+function Inline({ text, sourceIds, onCite, chipLabel }: AnswerTextProps) {
   return (
     <>
       {parseInline(text).map((part, index) => {
@@ -25,13 +27,14 @@ function Inline({ text, sourceIds, onCite }: AnswerTextProps) {
             <span key={index} className="whitespace-nowrap">
               {part.ids.map((id) => {
                 const known = sourceIds.includes(id)
+                const label = chipLabel?.(id) ?? id
                 return (
                   <button
                     key={id}
                     type="button"
                     disabled={!known}
                     onClick={() => onCite(id)}
-                    title={known ? `Show source ${id}` : `${id} is not one of the sources`}
+                    title={known ? `Show the cited passage (${label})` : `${id} is not one of the sources`}
                     className={cn(
                       'mx-0.5 rounded px-1 align-baseline font-mono text-[0.75em] font-semibold',
                       known
@@ -39,7 +42,7 @@ function Inline({ text, sourceIds, onCite }: AnswerTextProps) {
                         : 'bg-danger-soft text-danger line-through',
                     )}
                   >
-                    {id}
+                    {label}
                   </button>
                 )
               })}
