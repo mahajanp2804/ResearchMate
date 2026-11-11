@@ -79,9 +79,9 @@ class PaperProfileOut(BaseModel):
 
 
 class CompareRequest(BaseModel):
-    # The papers to compare, in column order; the limit is checked against
-    # MAX_COMPARE_PAPERS.
-    document_ids: list[str] = Field(min_length=2, max_length=50)
+    # The papers to compare, in column order: at least two different papers
+    # and at most MAX_COMPARE_PAPERS (checked by the service, with clear errors).
+    document_ids: list[str] = Field(max_length=50)
     # Rebuild the papers' profiles even if saved ones are current.
     refresh: bool = False
 
