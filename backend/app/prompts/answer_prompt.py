@@ -46,12 +46,12 @@ plainly what the papers do not cover.
 7. Be concise and precise. Use short paragraphs or bullet points and the papers' terminology."""
 
 
-def _escape_text(text: str) -> str:
+def escape_text(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _escape_attribute(text: str) -> str:
-    return _escape_text(text).replace('"', "&quot;")
+def escape_attribute(text: str) -> str:
+    return escape_text(text).replace('"', "&quot;")
 
 
 def _pages(chunk: "RetrievedChunk") -> str:
@@ -65,12 +65,12 @@ def format_sources(chunks: Sequence["RetrievedChunk"]) -> str:
     blocks = []
     for number, chunk in enumerate(chunks, start=1):
         attributes = (
-            f'id="S{number}" paper="{_escape_attribute(chunk.document_title)}" '
+            f'id="S{number}" paper="{escape_attribute(chunk.document_title)}" '
             f'pages="{_pages(chunk)}"'
         )
         if chunk.section:
-            attributes += f' section="{_escape_attribute(chunk.section)}"'
-        blocks.append(f"<source {attributes}>\n{_escape_text(chunk.text)}\n</source>")
+            attributes += f' section="{escape_attribute(chunk.section)}"'
+        blocks.append(f"<source {attributes}>\n{escape_text(chunk.text)}\n</source>")
     return "\n\n".join(blocks)
 
 
