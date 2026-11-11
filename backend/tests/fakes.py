@@ -1,5 +1,6 @@
 """Deterministic stand-ins for model-backed components, so most tests run offline."""
 
+import json
 import re
 import zlib
 from collections.abc import Sequence
@@ -104,43 +105,58 @@ class ScriptedLLM:
 
     Rewrite calls return the latest question unchanged unless ``rewrite`` is
     given. Answer calls cite the first source with its first sentence unless
-    ``answer`` is given. Either can be a string or a function of the prompt.
+    ``answer`` is given. Profile calls report every requested aspect as found,
+    citing the first sentence of S1, unless ``profile`` is given (a dict is
+    sent as JSON). Each script can also be a string or a function of the
+    prompt. Calls may come from several threads at once.
     """
 
     name = "scripted"
     model = "scripted-model"
 
-    def __init__(self, answer=None, rewrite=None) -> None:
+    def __init__(self, answer=None, rewrite=None, profile=None) -> None:
         self.answer = answer
         self.rewrite = rewrite
+        self.profile = profile
         self.calls: list[dict] = []
 
     def generate(
         self, *, system_prompt, turns, temperature=None, max_output_tokens=None, json_schema=None
     ):
+        from app.prompts.profile_prompt import PROFILE_SYSTEM_PROMPT
         from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT
         from app.services.llm_service import LLMResponse
 
         prompt = turns[-1].content
-        kind = "rewrite" if system_prompt == REWRITE_SYSTEM_PROMPT else "answer"
+        kind = {REWRITE_SYSTEM_PROMPT: "rewrite", PROFILE_SYSTEM_PROMPT: "profile"}.get(
+            system_prompt, "answer"
+        )
         self.calls.append(
             {
                 "kind": kind,
                 "system": system_prompt,
                 "turns": list(turns),
                 "temperature": temperature,
+                "json_schema": json_schema,
             }
         )
-        script = self.rewrite if kind == "rewrite" else self.answer
+        script = {"rewrite": self.rewrite, "profile": self.profile, "answer": self.answer}[kind]
         if callable(script):
-            text = script(prompt)
+            script = script(prompt)
+        if isinstance(script, dict):
+            text = json.dumps(script)
         elif script is not None:
             text = script
         elif kind == "rewrite":
             text = prompt.split("Latest question: ", 1)[1].split("\n", 1)[0]
         else:
             first_source = prompt.split(">\n", 1)[1].split("\n</source>", 1)[0]
-            text = f"{first_source.split('. ')[0].rstrip('.')} [S1]."
+            claim = f"{first_source.split('. ')[0].rstrip('.')} [S1]."
+            if kind == "answer":
+                text = claim
+            else:
+                keys = json_schema["required"]
+                text = json.dumps({key: {"found": True, "text": claim} for key in keys})
         return LLMResponse(text=text, model=self.model, prompt_tokens=len(prompt.split()))
 
     def calls_of(self, kind: str) -> list[dict]:

@@ -24,6 +24,7 @@ from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
 from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
 from app.services.llm_service import cached_provider, create_llm_provider
+from app.services.paper_profile_service import PaperProfileService
 from app.services.rag_pipeline import LLMProviderFactory, RagPipeline
 from app.services.reranker import get_cross_encoder_reranker
 from app.services.retrieval_service import RerankerProvider, RetrievalService
@@ -151,6 +152,9 @@ def create_app(
         reranker_provider=reranker_provider,
     )
     app.state.rag = RagPipeline(
+        settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
+    )
+    app.state.profiles = PaperProfileService(
         settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
     )
 
