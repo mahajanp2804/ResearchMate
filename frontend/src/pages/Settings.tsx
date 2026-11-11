@@ -118,6 +118,34 @@ export default function Settings() {
                 />
                 <SettingRow label="Chunks sent to the LLM" value={info.retrieval.final_context_chunks} />
                 <SettingRow label="Context token budget" value={info.retrieval.max_context_tokens} />
+                <SettingRow
+                  label="Guaranteed passages per selected paper"
+                  value={info.retrieval.min_passages_per_paper || 'Off'}
+                />
+              </dl>
+            )
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Summaries and comparisons"
+            description="Each paper is profiled once and the result is saved"
+          />
+          {loading && !info ? (
+            <SettingsSkeleton />
+          ) : (
+            info && (
+              <dl className="divide-y divide-border">
+                <SettingRow
+                  label="Passages retrieved per aspect"
+                  value={info.analysis.profile_passages_per_aspect}
+                />
+                <SettingRow
+                  label="Profile token budget"
+                  value={info.analysis.profile_max_context_tokens}
+                />
+                <SettingRow label="Papers per comparison" value={info.analysis.max_compare_papers} />
               </dl>
             )
           )}
