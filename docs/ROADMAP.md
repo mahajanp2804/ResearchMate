@@ -72,6 +72,11 @@ acceptance criteria each phase must meet before the next one starts.
 | Profile cache | One row per paper, keyed by a signature of the profile prompt version, chunking signature and embedding model | Re-processing a paper or changing the prompt makes old profiles stale automatically; `refresh` rebuilds on request. |
 | Comparisons | Retrieval for each paper runs in the request thread; only the LLM calls run in parallel (up to 4) | The database session and FAISS thread settings stay in one thread. If one paper fails, the others' profiles are still saved, so a retry only redoes the failed one. |
 | Questions about selected papers *(Phase 9)* | When a question is limited to 2+ selected papers, each paper is searched separately and gets `MIN_PASSAGES_PER_PAPER` (2) guaranteed context slots; the rest go to the best passages overall | Measured in a test: without it, a paper whose wording matches the question well took every slot and the other paper was never seen, so "compare the results of these papers" could not be answered. The evidence threshold still applies to guaranteed passages. |
+| Gap analysis *(Phase 10)* | One LLM call over every selected paper's gap-related passages returns three separate kinds of finding: limitations a paper **states** about itself, patterns **observed** across the papers (recurring challenges, differences, limited discussion), and **inferred** research directions, whose cited `evidence` is kept apart from the uncited `suggestion` | The specification asks for these to be distinguished; putting the inference in its own field means it can never be shown as something a paper said. |
+| Gap evidence | Each paper is searched separately with six gap questions (limitations, assumptions, future work, problem, evaluation scope, failure cases), 2 passages each, at most 3,000 tokens per paper | Every selected paper is represented equally, and one call sees everything needed to spot patterns across them. |
+| Checks on findings | In code: a stated limitation may only cite its own paper (other citations are removed); a recurring challenge or a difference must cite at least two papers; every finding needs a valid citation. Failing findings are left out and listed with the reason | Overstating a pattern ("both papers…" resting on one) or attributing a limitation to the wrong paper is how a model most easily misleads here; checking it in code makes the claim verifiable, and listing what was left out keeps the filter transparent. |
+| Scope of gap claims | A fixed scope note written by the code ("based only on the N selected papers…"), the prompt forbids novelty claims, and wording such as "unexplored", "no prior work" or "gap in the literature" is flagged on the finding | A handful of uploaded papers cannot show that a gap is new; the flag catches the model saying so anyway. |
+| Saved gap analyses | Keyed by the set of papers (in any order) and their chunking signatures and embedding model; deleting a paper deletes the analyses that include it | A reload or a repeat request costs no model call. Unlike chat answers, which keep their sources as a record, a cache should not keep a deleted paper's text. |
 
 ### Decision (Phase 3): chunk size vs. embedding window
 
@@ -103,7 +108,8 @@ ResearchMate/
 │   │   ├── database.py           # engine, session factory, Base, get_db
 │   │   ├── exceptions.py         # domain errors mapped to HTTP responses
 │   │   ├── models/               # SQLAlchemy ORM
-│   │   │   ├── document.py  page.py  chunk.py  conversation.py  profile.py  evaluation.py  activity.py
+│   │   │   ├── document.py  page.py  chunk.py  conversation.py  profile.py  gap_analysis.py
+│   │   │   ├── evaluation.py  activity.py
 │   │   ├── schemas/              # Pydantic API contracts
 │   │   │   ├── common.py  system.py  document.py  retrieval.py  chat.py  research.py  evaluation.py
 │   │   ├── routers/
@@ -117,7 +123,7 @@ ResearchMate/
 │   │   │   ├── llm_service.py  citation_service.py
 │   │   │   ├── paper_profile_service.py  # per-paper cited aspects behind summaries + comparisons
 │   │   │   ├── research_service.py       # summaries and comparisons on top of profiles
-│   │   │   ├── research_gap_service.py
+│   │   │   ├── research_gap_service.py   # stated / observed / inferred findings, checked in code
 │   │   │   └── evaluation_service.py  activity_service.py  stats_service.py  chat_service.py
 │   │   ├── prompts/
 │   │   │   ├── answer_prompt.py  rewrite_prompt.py  profile_prompt.py  research_gap_prompt.py
@@ -242,6 +248,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 
 ### Phase 10 — Research gap analysis
 - `POST /api/research/gaps`: explicit limitations → cross-paper patterns → inferred opportunities, each with citations and a scope disclaimer.
+- **Status: done.** `POST /api/research/gaps` analyses 2–5 papers and returns stated limitations (grouped by paper), recurring challenges, differences, topics with limited discussion and possible research directions, every one cited with an excerpt and exact page, plus the findings that failed the checks (see *Checks on findings* above) and a scope note. The Research Insights page shows the three kinds under separate labels (stated / observed / inferred), with the inferred suggestion visually apart from its evidence. Verified offline with a scripted model (including a misattributed citation, a one-paper "pattern", an uncited opportunity and an over-claiming suggestion, all caught) and in the browser with real retrieval and a stand-in model; the opt-in live test (`pytest -m llm`) runs it against Gemini once a key is set.
 
 ### Phase 11 — Evaluation
 - Curated dataset (questions, expected documents/pages/evidence, reference answers) over a reproducible sample collection.
