@@ -129,8 +129,8 @@ export default function Settings() {
 
         <Card>
           <CardHeader
-            title="Summaries and comparisons"
-            description="Each paper is profiled once and the result is saved"
+            title="Summaries, comparisons and gaps"
+            description="Each result is saved and reused until a paper is re-indexed"
           />
           {loading && !info ? (
             <SettingsSkeleton />
@@ -146,6 +146,15 @@ export default function Settings() {
                   value={info.analysis.profile_max_context_tokens}
                 />
                 <SettingRow label="Papers per comparison" value={info.analysis.max_compare_papers} />
+                <SettingRow
+                  label="Gap analysis: passages per question"
+                  value={info.analysis.gap_passages_per_question}
+                />
+                <SettingRow
+                  label="Gap analysis: token budget per paper"
+                  value={info.analysis.gap_max_tokens_per_paper}
+                />
+                <SettingRow label="Papers per gap analysis" value={info.analysis.max_gap_papers} />
               </dl>
             )
           )}
