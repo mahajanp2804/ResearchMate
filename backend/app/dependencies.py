@@ -11,6 +11,7 @@ from app.database import Database
 from app.services.ingestion_service import IngestionService
 from app.services.paper_profile_service import PaperProfileService
 from app.services.rag_pipeline import RagPipeline
+from app.services.research_gap_service import ResearchGapService
 from app.services.retrieval_service import RetrievalService
 
 
@@ -32,6 +33,10 @@ def get_rag(request: Request) -> RagPipeline:
 
 def get_profiles(request: Request) -> PaperProfileService:
     return request.app.state.profiles
+
+
+def get_gaps(request: Request) -> ResearchGapService:
+    return request.app.state.gaps
 
 
 def get_database(request: Request) -> Database:
@@ -56,3 +61,4 @@ IngestionDep = Annotated[IngestionService, Depends(get_ingestion)]
 RetrievalDep = Annotated[RetrievalService, Depends(get_retrieval)]
 RagDep = Annotated[RagPipeline, Depends(get_rag)]
 ProfilesDep = Annotated[PaperProfileService, Depends(get_profiles)]
+GapsDep = Annotated[ResearchGapService, Depends(get_gaps)]

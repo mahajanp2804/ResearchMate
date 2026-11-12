@@ -27,6 +27,7 @@ from app.services.llm_service import cached_provider, create_llm_provider
 from app.services.paper_profile_service import PaperProfileService
 from app.services.rag_pipeline import LLMProviderFactory, RagPipeline
 from app.services.reranker import get_cross_encoder_reranker
+from app.services.research_gap_service import ResearchGapService
 from app.services.retrieval_service import RerankerProvider, RetrievalService
 from app.services.tokenization import get_huggingface_tokenizer
 from app.services.vector_store import VectorStore
@@ -155,6 +156,9 @@ def create_app(
         settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
     )
     app.state.profiles = PaperProfileService(
+        settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
+    )
+    app.state.gaps = ResearchGapService(
         settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
     )
 

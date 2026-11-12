@@ -15,6 +15,7 @@ from app.models.base import new_id
 from app.services import ingestion_service, pdf_service
 from app.services.activity_service import record_activity
 from app.services.ingestion_service import IngestionService
+from app.services.research_gap_service import forget_document
 from app.utils.file_validation import (
     has_pdf_extension,
     looks_like_pdf,
@@ -194,13 +195,15 @@ def get_document_file(db: Session, settings: Settings, document_id: str) -> tupl
 def delete_document(
     db: Session, settings: Settings, ingestion: IngestionService, document_id: str
 ) -> None:
-    """Delete a document, its pages and chunks (via cascade), its vectors and its file."""
+    """Delete a document, its pages, chunks and profile (via cascade), the gap
+    analyses that include it, its vectors and its file."""
     document = get_document(db, document_id)
     path = settings.upload_dir / document.stored_path
     title = document.title or document.filename
     chunk_ids = ingestion.chunk_ids(db, document_id)
 
     db.delete(document)
+    forget_document(db, document_id)
     record_activity(db, ActivityType.DOCUMENT_DELETED, f"Deleted “{title}”")
     db.commit()
 

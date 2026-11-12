@@ -107,30 +107,36 @@ class ScriptedLLM:
     given. Answer calls cite the first source with its first sentence unless
     ``answer`` is given. Profile calls report every requested aspect as found,
     citing the first sentence of S1, unless ``profile`` is given (a dict is
-    sent as JSON). Each script can also be a string or a function of the
-    prompt. Calls may come from several threads at once.
+    sent as JSON). Gap analyses state one cited limitation per paper, one
+    challenge citing every paper and one opportunity unless ``gaps`` is
+    given. Each script can also be a string or a function of the prompt.
+    Calls may come from several threads at once.
     """
 
     name = "scripted"
     model = "scripted-model"
 
-    def __init__(self, answer=None, rewrite=None, profile=None) -> None:
+    def __init__(self, answer=None, rewrite=None, profile=None, gaps=None) -> None:
         self.answer = answer
         self.rewrite = rewrite
         self.profile = profile
+        self.gaps = gaps
         self.calls: list[dict] = []
 
     def generate(
         self, *, system_prompt, turns, temperature=None, max_output_tokens=None, json_schema=None
     ):
         from app.prompts.profile_prompt import PROFILE_SYSTEM_PROMPT
+        from app.prompts.research_gap_prompt import GAP_SYSTEM_PROMPT
         from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT
         from app.services.llm_service import LLMResponse
 
         prompt = turns[-1].content
-        kind = {REWRITE_SYSTEM_PROMPT: "rewrite", PROFILE_SYSTEM_PROMPT: "profile"}.get(
-            system_prompt, "answer"
-        )
+        kind = {
+            REWRITE_SYSTEM_PROMPT: "rewrite",
+            PROFILE_SYSTEM_PROMPT: "profile",
+            GAP_SYSTEM_PROMPT: "gaps",
+        }.get(system_prompt, "answer")
         self.calls.append(
             {
                 "kind": kind,
@@ -140,7 +146,13 @@ class ScriptedLLM:
                 "json_schema": json_schema,
             }
         )
-        script = {"rewrite": self.rewrite, "profile": self.profile, "answer": self.answer}[kind]
+        scripts = {
+            "rewrite": self.rewrite,
+            "profile": self.profile,
+            "gaps": self.gaps,
+            "answer": self.answer,
+        }
+        script = scripts[kind]
         if callable(script):
             script = script(prompt)
         if isinstance(script, dict):
@@ -149,6 +161,8 @@ class ScriptedLLM:
             text = script
         elif kind == "rewrite":
             text = prompt.split("Latest question: ", 1)[1].split("\n", 1)[0]
+        elif kind == "gaps":
+            text = json.dumps(_default_gaps(prompt))
         else:
             first_source = prompt.split(">\n", 1)[1].split("\n</source>", 1)[0]
             claim = f"{first_source.split('. ')[0].rstrip('.')} [S1]."
@@ -161,3 +175,32 @@ class ScriptedLLM:
 
     def calls_of(self, kind: str) -> list[dict]:
         return [call for call in self.calls if call["kind"] == kind]
+
+
+def _default_gaps(prompt: str) -> dict:
+    """A valid gap analysis citing each paper's first passage."""
+    first: dict[str, str] = {}
+    for source_id, paper in re.findall(r'<source id="(S\d+)" paper="(P\d+)"', prompt):
+        first.setdefault(paper, source_id)
+    every_paper = "".join(f"[{source_id}]" for source_id in first.values())
+    return {
+        "stated_limitations": [
+            {"paper": paper, "text": f"The paper states a limitation of its approach [{source}]."}
+            for paper, source in first.items()
+        ],
+        "recurring_challenges": [
+            {
+                "title": "Shared challenge",
+                "text": f"Each paper describes this challenge {every_paper}.",
+            }
+        ],
+        "differences": [],
+        "limited_discussion": [],
+        "opportunities": [
+            {
+                "title": "Follow-up study",
+                "evidence": f"The papers describe open problems {every_paper}.",
+                "suggestion": "Study these problems together.",
+            }
+        ],
+    }
