@@ -290,6 +290,40 @@ class RetrievalService:
             chunks=[replace(chunk, rank=rank) for rank, chunk in enumerate(ordered, start=1)],
         )
 
+    def passages_for_questions(
+        self,
+        db: Session,
+        document_id: str,
+        questions: Sequence[str],
+        *,
+        per_question: int,
+        max_tokens: int,
+    ) -> list[RetrievedChunk]:
+        """A paper's best passages for several questions, in reading order.
+
+        Each question is searched within the paper on its own. Every
+        question's best passage is kept before any question's second best,
+        so a question with many matches cannot crowd out a rarer one; the
+        token budget then trims the least important.
+        """
+        settings = self._settings
+        only_this_paper = frozenset({document_id})
+        scope = SearchScope(document_ids=only_this_paper, searchable_document_ids=only_this_paper)
+        search = self.reranked_search if settings.reranker_enabled else self.hybrid_search
+        ranked = [search(db, question, per_question, scope) for question in questions]
+
+        candidates: list[RetrievedChunk] = []
+        seen: set[int] = set()
+        for position in range(per_question):
+            for hits in ranked:
+                if position < len(hits) and hits[position].chunk_id not in seen:
+                    seen.add(hits[position].chunk_id)
+                    candidates.append(hits[position])
+        if not candidates:
+            return []
+        selection = select_context(candidates, max_chunks=len(candidates), max_tokens=max_tokens)
+        return sorted(selection.chunks, key=lambda chunk: chunk.chunk_index)
+
     # --- Hydration ---------------------------------------------------------
 
     def _hydrate(

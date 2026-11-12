@@ -6,7 +6,8 @@ methodology, datasets, results, limitations, ...). Building one:
 1. Evidence: each aspect has its own retrieval question, searched within
    that paper only (hybrid search + reranking). Every aspect's best passage
    is kept before any aspect's second best, within a token budget, and the
-   kept passages are put back in reading order as sources S1..Sn.
+   kept passages are put back in reading order as sources S1..Sn
+   (``RetrievalService.passages_for_questions``).
 2. Extraction: one LLM call fills in every aspect as JSON, citing sources,
    or marks it as not found.
 3. Validation, per aspect (as in Phase 8): citations to passages that were
@@ -47,14 +48,8 @@ from app.services.citation_service import (
     citation_coverage,
     validate_citations,
 )
-from app.services.context_selection import select_context
 from app.services.rag_pipeline import LLMProviderFactory
-from app.services.retrieval_service import (
-    RetrievalService,
-    RetrievedChunk,
-    SearchScope,
-    page_texts_for,
-)
+from app.services.retrieval_service import RetrievalService, RetrievedChunk, page_texts_for
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -176,38 +171,19 @@ class PaperProfileService:
 
     def gather_evidence(self, db: Session, document: Document) -> ProfileEvidence:
         started = time.perf_counter()
-        settings = self._settings
-        only_this_paper = frozenset({document.id})
-        scope = SearchScope(document_ids=only_this_paper, searchable_document_ids=only_this_paper)
-        search = (
-            self._retrieval.reranked_search
-            if settings.reranker_enabled
-            else self._retrieval.hybrid_search
+        chunks = self._retrieval.passages_for_questions(
+            db,
+            document.id,
+            [aspect.query for aspect in ASPECTS],
+            per_question=self._settings.profile_passages_per_aspect,
+            max_tokens=self._settings.profile_max_context_tokens,
         )
-        per_aspect = settings.profile_passages_per_aspect
-        ranked = [search(db, aspect.query, per_aspect, scope) for aspect in ASPECTS]
-
-        # Interleave so every aspect gets its best passage before any aspect
-        # gets a second one; the budget then trims the least important.
-        candidates: list[RetrievedChunk] = []
-        seen: set[int] = set()
-        for position in range(per_aspect):
-            for hits in ranked:
-                if position < len(hits) and hits[position].chunk_id not in seen:
-                    seen.add(hits[position].chunk_id)
-                    candidates.append(hits[position])
-        if not candidates:
+        if not chunks:
             raise ConflictError(
                 "This paper has no passages to read. Re-index it from My Research Papers.",
                 code="paper_has_no_passages",
                 details={"document_id": document.id},
             )
-        selection = select_context(
-            candidates,
-            max_chunks=len(candidates),
-            max_tokens=settings.profile_max_context_tokens,
-        )
-        chunks = sorted(selection.chunks, key=lambda chunk: chunk.chunk_index)
         return ProfileEvidence(
             document_id=document.id,
             title=document.title or document.filename,
