@@ -2,7 +2,7 @@ import { ChevronDown, Info, KeyRound, Lightbulb, RefreshCw, TriangleAlert } from
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CitationDialog, type CitedPassage } from '../components/research/CitationDialog'
-import { FindingText } from '../components/research/FindingText'
+import { FindingText, ScopeWarning } from '../components/research/FindingText'
 import { PaperPicker } from '../components/research/PaperPicker'
 import { Badge, type BadgeTone } from '../components/ui/Badge'
 import { Button, ButtonLink } from '../components/ui/Button'
@@ -74,23 +74,21 @@ function Section({
   )
 }
 
+/** The labels (P1, P2, ...) of the papers a finding cites, in label order. */
 function PaperLabels({ ids, analysis }: { ids: string[]; analysis: GapAnalysis }) {
   return (
     <span className="flex flex-wrap gap-1">
-      {ids.map((id) => {
-        const paper = analysis.papers.find((item) => item.document_id === id)
-        return (
-          paper && (
-            <span
-              key={id}
-              title={paper.title}
-              className="rounded bg-surface-muted px-1.5 font-mono text-[0.7rem] font-semibold text-fg-muted"
-            >
-              {paper.label}
-            </span>
-          )
-        )
-      })}
+      {analysis.papers
+        .filter((paper) => ids.includes(paper.document_id))
+        .map((paper) => (
+          <span
+            key={paper.document_id}
+            title={paper.title}
+            className="rounded bg-surface-muted px-1.5 font-mono text-[0.7rem] font-semibold text-fg-muted"
+          >
+            {paper.label}
+          </span>
+        ))}
     </span>
   )
 }
@@ -231,6 +229,7 @@ function Results({
                   analysis={analysis}
                   label={opportunity.title ?? 'Research direction'}
                   onCite={onCite}
+                  showScopeWarning={false}
                 />
               </div>
               <div className="flex gap-2.5 rounded-lg border border-dashed border-warning/40 px-3 py-2.5">
@@ -242,6 +241,9 @@ function Results({
                   </p>
                 </div>
               </div>
+              {opportunity.beyond_scope && (
+                <ScopeWarning paperCount={analysis.papers.length} />
+              )}
             </div>
           ))
         )}
@@ -368,6 +370,7 @@ export default function Insights() {
               selected={selected}
               max={maxPapers}
               onChange={setSelected}
+              legend="Papers to analyse"
             />
           )}
           <div className="flex flex-wrap items-center gap-3">

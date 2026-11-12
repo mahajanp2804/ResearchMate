@@ -10,13 +10,32 @@ interface FindingTextProps {
   /** Names the finding in the passage dialog, e.g. "Stated limitation". */
   label: string
   onCite: (passage: CitedPassage) => void
+  /** Show the over-claiming warning here (off when the caller places it). */
+  showScopeWarning?: boolean
+}
+
+/** Shown when a finding's wording claims more than the selected papers can show. */
+export function ScopeWarning({ paperCount }: { paperCount: number }) {
+  return (
+    <p className="flex gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-fg">
+      <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+      This wording claims more than {paperCount} selected papers can show. Treat it as a statement
+      about these papers only.
+    </p>
+  )
 }
 
 /**
  * A gap-analysis finding with citation chips labelled by paper and page
  * ("P2 p. 4"), and the warnings from the evidence checks.
  */
-export function FindingText({ finding, analysis, label, onCite }: FindingTextProps) {
+export function FindingText({
+  finding,
+  analysis,
+  label,
+  onCite,
+  showScopeWarning = true,
+}: FindingTextProps) {
   const citations = new Map(finding.citations.map((citation) => [citation.source_id, citation]))
   const sources = new Map(analysis.sources.map((source) => [source.source_id, source]))
   const papers = new Map(analysis.papers.map((paper) => [paper.document_id, paper]))
@@ -62,12 +81,8 @@ export function FindingText({ finding, analysis, label, onCite }: FindingTextPro
           limitation may only cite its own paper.
         </p>
       )}
-      {finding.beyond_scope && (
-        <p className="flex gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-fg">
-          <TriangleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
-          This wording claims more than {analysis.papers.length} selected papers can show. Treat it
-          as a statement about these papers only.
-        </p>
+      {showScopeWarning && finding.beyond_scope && (
+        <ScopeWarning paperCount={analysis.papers.length} />
       )}
     </div>
   )

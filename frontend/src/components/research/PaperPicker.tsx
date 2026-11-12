@@ -7,10 +7,12 @@ interface PaperPickerProps {
   selected: string[]
   max: number
   onChange: (selected: string[]) => void
+  /** Names the list for screen readers, e.g. "Papers to compare". */
+  legend: string
 }
 
 /** Checkbox list of searchable papers; the pick order becomes the column order. */
-export function PaperPicker({ papers, selected, max, onChange }: PaperPickerProps) {
+export function PaperPicker({ papers, selected, max, onChange, legend }: PaperPickerProps) {
   const full = selected.length >= max
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id])
@@ -19,7 +21,7 @@ export function PaperPicker({ papers, selected, max, onChange }: PaperPickerProp
     // min-w-0: a fieldset is min-content wide by default, which stops long
     // author lists from truncating.
     <fieldset className="min-w-0">
-      <legend className="sr-only">Papers to compare</legend>
+      <legend className="sr-only">{legend}</legend>
       <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
         {papers.map((paper) => {
           const checked = selected.includes(paper.id)

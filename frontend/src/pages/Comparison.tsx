@@ -110,6 +110,7 @@ export default function Comparison() {
               selected={selected}
               max={maxPapers}
               onChange={setSelected}
+              legend="Papers to compare"
             />
           )}
           <div className="flex flex-wrap items-center gap-3">
