@@ -35,11 +35,15 @@ class RetrievalInfo(BaseModel):
 
 
 class AnalysisInfo(BaseModel):
-    """Paper profiles, behind summaries and comparisons."""
+    """Paper profiles (behind summaries and comparisons) and gap analysis."""
 
     profile_passages_per_aspect: int
     profile_max_context_tokens: int
     max_compare_papers: int
+    # Research gap analysis.
+    gap_passages_per_question: int
+    gap_max_tokens_per_paper: int
+    max_gap_papers: int
 
 
 class LLMInfo(BaseModel):

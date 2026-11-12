@@ -48,6 +48,9 @@ def test_system_info_never_exposes_secrets(tmp_path) -> None:
         "profile_passages_per_aspect": 3,
         "profile_max_context_tokens": 8000,
         "max_compare_papers": 5,
+        "gap_passages_per_question": 2,
+        "gap_max_tokens_per_paper": 3000,
+        "max_gap_papers": 5,
     }
 
 
