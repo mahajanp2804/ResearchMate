@@ -8,6 +8,7 @@ from app.models.evaluation import (
     EvaluationRun,
     EvaluationRunStatus,
 )
+from app.models.gap_analysis import GapAnalysis
 from app.models.page import DocumentPage
 from app.models.profile import PaperProfile
 
@@ -22,6 +23,7 @@ __all__ = [
     "EvaluationQuestion",
     "EvaluationRun",
     "EvaluationRunStatus",
+    "GapAnalysis",
     "IndexingStatus",
     "Message",
     "MessageRole",
