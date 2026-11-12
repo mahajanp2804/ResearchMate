@@ -1,11 +1,13 @@
 from fastapi import APIRouter
 
-from app.dependencies import DbSession, ProfilesDep, SettingsDep
+from app.dependencies import DbSession, GapsDep, ProfilesDep, SettingsDep
 from app.prompts.profile_prompt import ASPECTS_BY_KEY, COMPARISON_ASPECTS, SUMMARY_SECTIONS
 from app.schemas.research import (
     AspectLabel,
     CompareRequest,
     ComparisonResponse,
+    GapAnalysisRequest,
+    GapAnalysisResponse,
     PaperProfileOut,
 )
 from app.services import research_service
@@ -62,3 +64,19 @@ def compare(
             for document, profile, cached in results
         ],
     )
+
+
+@router.post("/gaps", response_model=GapAnalysisResponse)
+def research_gaps(request: GapAnalysisRequest, db: DbSession, gaps: GapsDep) -> GapAnalysisResponse:
+    """Limitations, patterns and possible research directions across selected papers.
+
+    Findings are kept in three kinds: limitations the papers state about
+    themselves, patterns observed across the selected papers, and research
+    opportunities inferred from those. Every finding cites passages and is
+    checked in code (a cross-paper pattern must cite two papers); findings
+    that fail are listed in ``left_out``. The analysis covers only the
+    selected papers, which ``scope_note`` states, and is saved and reused for
+    the same papers until one is re-indexed or ``refresh`` is set.
+    """
+    analysis, cached = gaps.analyse(db, request.document_ids, refresh=request.refresh)
+    return GapAnalysisResponse.from_analysis(analysis, cached=cached)
