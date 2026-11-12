@@ -64,19 +64,23 @@ def saved_summary(
     return document, profile
 
 
-def _papers_to_compare(
-    db: Session, settings: Settings, document_ids: Sequence[str]
+def select_papers(
+    db: Session, document_ids: Sequence[str], *, max_papers: int, verb: str
 ) -> list[Document]:
+    """Two to ``max_papers`` different, searchable papers, in the requested order.
+
+    ``verb`` names the action in error messages, e.g. "compare".
+    """
     requested = list(dict.fromkeys(document_ids))  # de-duplicate, keep order
     if len(requested) < 2:
         raise InvalidInputError(
-            "Select at least two different papers to compare.", code="too_few_papers"
+            f"Select at least two different papers to {verb}.", code="too_few_papers"
         )
-    if len(requested) > settings.max_compare_papers:
+    if len(requested) > max_papers:
         raise InvalidInputError(
-            f"Compare at most {settings.max_compare_papers} papers at a time.",
+            f"Select at most {max_papers} papers to {verb} at a time.",
             code="too_many_papers",
-            details={"max_papers": settings.max_compare_papers},
+            details={"max_papers": max_papers},
         )
     found = {
         document.id: document
@@ -137,7 +141,9 @@ def compare(
     Missing profiles are built in parallel. If some fail, the ones that
     succeeded are still saved, so trying again only redoes the rest.
     """
-    documents = _papers_to_compare(db, settings, document_ids)
+    documents = select_papers(
+        db, document_ids, max_papers=settings.max_compare_papers, verb="compare"
+    )
     saved = (
         {} if refresh else {document.id: profiles.current(db, document) for document in documents}
     )
