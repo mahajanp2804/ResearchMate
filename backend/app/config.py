@@ -112,6 +112,15 @@ class Settings(BaseSettings):
     # Papers per comparison; each needs its own profile (one LLM call, cached).
     max_compare_papers: int = Field(default=5, ge=2, le=10)
 
+    # --- Research gap analysis -----------------------------------------------
+    # Each selected paper is searched with a few gap-related questions
+    # (limitations, assumptions, future work, evaluation scope, ...)...
+    gap_passages_per_question: int = Field(default=2, gt=0, le=10)
+    # ...keeping at most this many tokens per paper, so every paper is heard.
+    gap_max_tokens_per_paper: int = Field(default=3000, gt=0)
+    # Papers per analysis: all their passages go into one LLM call.
+    max_gap_papers: int = Field(default=5, ge=2, le=10)
+
     @model_validator(mode="after")
     def _validate(self) -> "Settings":
         if self.chunk_overlap_tokens >= self.chunk_size_tokens:
