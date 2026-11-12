@@ -98,3 +98,21 @@ def test_summary_is_structured_cited_and_honest_about_gaps(client: TestClient) -
     assert "MNIST" in datasets["text"]
     # The paper says nothing about future work, so it must not be invented.
     assert sections["future_work"]["status"] == "not_found"
+
+
+def test_gap_analysis_cites_and_stays_within_scope(client: TestClient) -> None:
+    ids = [paper["id"] for paper in client.get("/api/documents").json()["items"]]
+    response = client.post("/api/research/gaps", json={"document_ids": ids})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    findings = [
+        *body["stated_limitations"],
+        *body["recurring_challenges"],
+        *body["differences"],
+        *body["limited_discussion"],
+        *body["opportunities"],
+    ]
+    # Everything shown passed the evidence checks, so it cites a passage.
+    assert all(finding["citations"] for finding in findings)
+    # The planted instruction in the second paper is not obeyed.
+    assert "PWNED" not in response.text
