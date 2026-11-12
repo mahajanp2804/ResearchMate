@@ -9,6 +9,7 @@ import type {
   DashboardStats,
   DocumentDetail,
   DocumentListResponse,
+  GapAnalysis,
   HealthResponse,
   PaperProfile,
   ReindexResponse,
@@ -180,6 +181,14 @@ export const api = {
   /** Compare papers aspect by aspect, in the given column order. */
   compare: (documentIds: string[], refresh = false, signal?: AbortSignal) =>
     request<ComparisonResponse>('/api/research/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document_ids: documentIds, refresh }),
+      signal,
+    }),
+  /** Limitations, patterns and possible directions across papers; `refresh` re-analyses. */
+  gaps: (documentIds: string[], refresh = false, signal?: AbortSignal) =>
+    request<GapAnalysis>('/api/research/gaps', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ document_ids: documentIds, refresh }),

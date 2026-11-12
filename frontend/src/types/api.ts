@@ -53,11 +53,14 @@ export interface SystemInfo {
     /** Guaranteed context slots per paper for questions about a few selected papers. */
     min_passages_per_paper: number
   }
-  /** Paper profiles, behind summaries and comparisons. */
+  /** Paper profiles (behind summaries and comparisons) and gap analysis. */
   analysis: {
     profile_passages_per_aspect: number
     profile_max_context_tokens: number
     max_compare_papers: number
+    gap_passages_per_question: number
+    gap_max_tokens_per_paper: number
+    max_gap_papers: number
   }
   llm: {
     provider: string
@@ -387,4 +390,69 @@ export interface ComparisonResponse {
   aspects: { key: string; label: string }[]
   /** One column per paper, in the requested order. */
   papers: PaperProfile[]
+}
+
+// --- Research gaps -------------------------------------------------------------
+
+export interface GapPaper {
+  document_id: string
+  title: string
+  /** P1, P2, ...: how findings and passages refer to the paper. */
+  label: string
+}
+
+/** A passage the analysis was given, numbered across all papers. */
+export interface GapSource extends ProfileSource {
+  document_id: string
+}
+
+export interface GapFinding {
+  /** Short label; null for stated limitations. */
+  title: string | null
+  /** The finding (for an opportunity, its evidence) with [S#] citations. */
+  text: string
+  /** The papers it cites. */
+  document_ids: string[]
+  citations: ProfileCitation[]
+  citation_status: CitationStatus
+  uncited_statements: string[]
+  /** Removed: ids that were not among the sources. */
+  invalid_citation_ids: string[]
+  /** Removed from a stated limitation: ids of another paper's passages. */
+  misattributed_citation_ids: string[]
+  /** Its wording claims more than the selected papers can show. */
+  beyond_scope: boolean
+}
+
+export interface GapOpportunity extends GapFinding {
+  /** The inferred direction; not stated by the papers. */
+  suggestion: string
+}
+
+export interface LeftOutFinding {
+  kind: string
+  title: string
+  reason: 'no_valid_citation' | 'cites_other_paper' | 'cites_one_paper'
+  explanation: string
+}
+
+export interface GapAnalysis {
+  papers: GapPaper[]
+  scope_note: string
+  /** Stated by the papers about their own work. */
+  stated_limitations: GapFinding[]
+  /** Observed across the selected papers. */
+  recurring_challenges: GapFinding[]
+  differences: GapFinding[]
+  limited_discussion: GapFinding[]
+  /** Inferred from the findings above. */
+  opportunities: GapOpportunity[]
+  /** Findings that failed the evidence checks. */
+  left_out: LeftOutFinding[]
+  malformed_items: number
+  sources: GapSource[]
+  model: string
+  generated_at: string
+  cached: boolean
+  truncated: boolean
 }
