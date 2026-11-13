@@ -301,10 +301,12 @@ class EvaluationService:
                     self._answers.run(db, run, self._scope(db, run))
                 run.status = EvaluationRunStatus.COMPLETED
                 run.metrics = {**run.metrics, "progress": {"phase": "done", "done": 1, "total": 1}}
+                answers = run.config.get("answer_quality")
+                measured = "retrieval and answers" if answers else "retrieval"
                 record_activity(
                     db,
                     ActivityType.EVALUATION_RUN,
-                    f"Evaluated retrieval on “{run.config['dataset_name']}”",
+                    f"Evaluated {measured} on “{run.config['dataset_name']}”",
                 )
             except Exception as error:  # recorded on the run, shown in the UI
                 logger.exception("Evaluation run %s failed", run_id)

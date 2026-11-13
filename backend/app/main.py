@@ -20,6 +20,7 @@ from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
 from app.routers import chat, documents, research, retrieval, system
+from app.services.answer_evaluation import AnswerEvaluator
 from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
 from app.services.evaluation_service import EvaluationService
@@ -168,6 +169,9 @@ def create_app(
         database=database,
         ingestion=ingestion,
         retrieval=app.state.retrieval,
+        answer_evaluator=AnswerEvaluator(
+            settings=settings, rag=app.state.rag, llm_provider=llm_provider
+        ),
     )
 
     app.add_middleware(

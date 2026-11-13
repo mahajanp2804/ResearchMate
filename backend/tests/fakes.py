@@ -109,23 +109,27 @@ class ScriptedLLM:
     citing the first sentence of S1, unless ``profile`` is given (a dict is
     sent as JSON). Gap analyses state one cited limitation per paper, one
     challenge citing every paper and one opportunity unless ``gaps`` is
-    given. Each script can also be a string or a function of the prompt.
-    Calls may come from several threads at once.
+    given. Judge calls rate every statement supported, every passage
+    relevant and the answer 5 out of 5 unless ``judge`` is given. Each script
+    can also be a string or a function of the prompt. Calls may come from
+    several threads at once.
     """
 
     name = "scripted"
     model = "scripted-model"
 
-    def __init__(self, answer=None, rewrite=None, profile=None, gaps=None) -> None:
+    def __init__(self, answer=None, rewrite=None, profile=None, gaps=None, judge=None) -> None:
         self.answer = answer
         self.rewrite = rewrite
         self.profile = profile
         self.gaps = gaps
+        self.judge = judge
         self.calls: list[dict] = []
 
     def generate(
         self, *, system_prompt, turns, temperature=None, max_output_tokens=None, json_schema=None
     ):
+        from app.prompts.judge_prompt import JUDGE_SYSTEM_PROMPT
         from app.prompts.profile_prompt import PROFILE_SYSTEM_PROMPT
         from app.prompts.research_gap_prompt import GAP_SYSTEM_PROMPT
         from app.prompts.rewrite_prompt import REWRITE_SYSTEM_PROMPT
@@ -136,6 +140,7 @@ class ScriptedLLM:
             REWRITE_SYSTEM_PROMPT: "rewrite",
             PROFILE_SYSTEM_PROMPT: "profile",
             GAP_SYSTEM_PROMPT: "gaps",
+            JUDGE_SYSTEM_PROMPT: "judge",
         }.get(system_prompt, "answer")
         self.calls.append(
             {
@@ -150,6 +155,7 @@ class ScriptedLLM:
             "rewrite": self.rewrite,
             "profile": self.profile,
             "gaps": self.gaps,
+            "judge": self.judge,
             "answer": self.answer,
         }
         script = scripts[kind]
@@ -163,6 +169,8 @@ class ScriptedLLM:
             text = prompt.split("Latest question: ", 1)[1].split("\n", 1)[0]
         elif kind == "gaps":
             text = json.dumps(_default_gaps(prompt))
+        elif kind == "judge":
+            text = json.dumps(_default_judgement(prompt, json_schema))
         else:
             first_source = prompt.split(">\n", 1)[1].split("\n</source>", 1)[0]
             claim = f"{first_source.split('. ')[0].rstrip('.')} [S1]."
@@ -204,3 +212,18 @@ def _default_gaps(prompt: str) -> dict:
             }
         ],
     }
+
+
+def _default_judgement(prompt: str, schema: dict) -> dict:
+    """Every statement supported, every passage relevant, top scores."""
+    statements = prompt.split("Answer statements:\n", 1)[1].splitlines()
+    reply = {
+        "statements": [{"index": n, "supported": True} for n in range(1, len(statements) + 1)],
+        "passages": [
+            {"id": pid, "relevant": True} for pid in re.findall(r'<passage id="(S\d+)">', prompt)
+        ],
+        "answer_relevance": 5,
+    }
+    if "correctness" in schema["properties"]:
+        reply["correctness"] = 5
+    return reply
