@@ -22,6 +22,15 @@ export const CATEGORY_LABELS: Record<QuestionCategory, string> = {
   unanswerable: 'Not answerable',
 }
 
+/** Short names for chart axes, where space is tight. */
+export const CATEGORY_SHORT_LABELS: Record<QuestionCategory, string> = {
+  factual: 'Factual',
+  paraphrase: 'Paraphrase',
+  keyword: 'Exact term',
+  multi_paper: 'Two papers',
+  unanswerable: 'Unanswerable',
+}
+
 export const CATEGORY_DESCRIPTIONS: Record<QuestionCategory, string> = {
   factual: 'Asks for a fact in roughly the paper’s own words.',
   paraphrase: 'Asks in different words from the paper.',

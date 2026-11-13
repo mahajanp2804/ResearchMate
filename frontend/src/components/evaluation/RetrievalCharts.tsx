@@ -13,6 +13,7 @@ import {
 import type { EvaluationRunSummary, QuestionCategory, SearchMethod } from '../../types/api'
 import {
   CATEGORY_LABELS,
+  CATEGORY_SHORT_LABELS,
   METHOD_LABELS,
   formatScore,
   methodColor,
@@ -36,15 +37,17 @@ function ChartTooltip({
   active,
   payload,
   label,
+  formatLabel = String,
 }: {
   active?: boolean
   payload?: readonly TooltipEntry[]
   label?: unknown
+  formatLabel?: (label: unknown) => string
 }) {
   if (!active || !payload?.length) return null
   return (
     <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1 font-medium text-fg-muted">{String(label)}</p>
+      <p className="mb-1 font-medium text-fg-muted">{formatLabel(label)}</p>
       <ul className="space-y-0.5">
         {payload.map((entry) => {
           const method = entry.dataKey as SearchMethod
@@ -130,10 +133,11 @@ function bars(methods: SearchMethod[]) {
 export function MetricsAtKChart({ run, k }: { run: EvaluationRunSummary; k: number }) {
   const methods = run.config.methods
   const retrieval = run.metrics.retrieval ?? {}
+  // K is in the title, so the axis labels stay short enough to all show.
   const rows = [
-    { label: `Precision@${k}`, key: `precision@${k}` },
-    { label: `Recall@${k}`, key: `recall@${k}` },
-    { label: `Hit rate@${k}`, key: `hit@${k}` },
+    { label: 'Precision', key: `precision@${k}` },
+    { label: 'Recall', key: `recall@${k}` },
+    { label: 'Hit rate', key: `hit@${k}` },
     { label: 'MRR', key: 'mrr' },
   ].map(({ label, key }) => ({
     label,
@@ -146,13 +150,13 @@ export function MetricsAtKChart({ run, k }: { run: EvaluationRunSummary; k: numb
   return (
     <ChartFrame
       title={`Retrieval quality at K = ${k}`}
-      description="Higher is better. Precision is capped by how few passages hold each answer."
+      description={`Precision, recall and hit rate within the top ${k} passages, and MRR. Precision is capped by how few passages hold each answer.`}
       summary={`Bar chart of precision, recall and hit rate at ${k} and MRR for each method. Highest MRR: ${METHOD_LABELS[best]}.`}
     >
-      <BarChart data={rows} barGap={2} barCategoryGap="22%" margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+      <BarChart data={rows} barGap={2} barCategoryGap="22%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <CartesianGrid stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="label" {...AXIS} />
-        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} />
+        <XAxis dataKey="label" {...AXIS} interval={0} />
+        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} width={36} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-muted)' }} />
         {bars(methods)}
       </BarChart>
@@ -174,10 +178,10 @@ export function RecallCurveChart({ run }: { run: EvaluationRunSummary }) {
       description="Share of each question’s evidence found within the top K passages."
       summary="Line chart of recall at 1, 3, 5 and 10 passages for each method."
     >
-      <LineChart data={rows} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+      <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
         <CartesianGrid stroke="var(--border)" vertical={false} />
         <XAxis dataKey="label" {...AXIS} padding={{ left: 12, right: 12 }} />
-        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} />
+        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} width={36} />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border-strong)' }} />
         {methods.map((method) => (
           <Line
@@ -197,6 +201,31 @@ export function RecallCurveChart({ run }: { run: EvaluationRunSummary }) {
   )
 }
 
+/** A short category name with its question count underneath, so labels fit on phones. */
+function CategoryTick({
+  x,
+  y,
+  payload,
+  counts,
+}: {
+  x?: number
+  y?: number
+  payload?: { value: string }
+  counts: Partial<Record<QuestionCategory, number>>
+}) {
+  const category = payload?.value as QuestionCategory
+  return (
+    <text x={x} y={y} textAnchor="middle" fill="var(--fg-subtle)" fontSize={11}>
+      <tspan x={x} dy="0.9em">
+        {CATEGORY_SHORT_LABELS[category]}
+      </tspan>
+      <tspan x={x} dy="1.25em">
+        n = {counts[category] ?? 0}
+      </tspan>
+    </text>
+  )
+}
+
 /** MRR per question category: where each method wins or loses. */
 export function CategoryChart({ run }: { run: EvaluationRunSummary }) {
   const methods = run.config.methods
@@ -204,8 +233,11 @@ export function CategoryChart({ run }: { run: EvaluationRunSummary }) {
   const categories = (Object.keys(CATEGORY_LABELS) as QuestionCategory[]).filter(
     (category) => byCategory[methods[0]]?.[category],
   )
+  const counts = Object.fromEntries(
+    categories.map((category) => [category, byCategory[methods[0]]?.[category]?.questions ?? 0]),
+  )
   const rows = categories.map((category) => ({
-    label: `${CATEGORY_LABELS[category]} (${byCategory[methods[0]]?.[category]?.questions ?? 0})`,
+    category,
     ...Object.fromEntries(
       methods.map((m) => [m, metricValue(byCategory[m]?.[category], 'mrr')]),
     ),
@@ -213,14 +245,29 @@ export function CategoryChart({ run }: { run: EvaluationRunSummary }) {
   return (
     <ChartFrame
       title="MRR by question type"
-      description="How early the first relevant passage appears, per kind of question (number of questions in brackets)."
+      description="How early the first relevant passage appears, per kind of question (n = number of questions)."
       summary="Bar chart of mean reciprocal rank per question type for each method."
     >
-      <BarChart data={rows} barGap={2} barCategoryGap="22%" margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+      <BarChart data={rows} barGap={2} barCategoryGap="22%" margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <CartesianGrid stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="label" {...AXIS} interval={0} />
-        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} />
-        <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-muted)' }} />
+        <XAxis
+          dataKey="category"
+          {...AXIS}
+          interval={0}
+          height={40}
+          tick={<CategoryTick counts={counts} />}
+        />
+        <YAxis domain={[0, 1]} ticks={SCORE_TICKS} {...AXIS} axisLine={false} width={36} />
+        <Tooltip
+          content={
+            <ChartTooltip
+              formatLabel={(label) =>
+                `${CATEGORY_LABELS[label as QuestionCategory]} (${counts[label as QuestionCategory]} questions)`
+              }
+            />
+          }
+          cursor={{ fill: 'var(--surface-muted)' }}
+        />
         {bars(methods)}
       </BarChart>
     </ChartFrame>
