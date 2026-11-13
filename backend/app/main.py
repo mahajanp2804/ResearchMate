@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import Settings, get_settings
 from app.database import Database
 from app.exceptions import ResearchMateError
-from app.routers import chat, documents, research, retrieval, system
+from app.routers import chat, documents, evaluation, research, retrieval, system
 from app.services.answer_evaluation import AnswerEvaluator
 from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
@@ -227,6 +227,7 @@ def create_app(
     app.include_router(retrieval.router)
     app.include_router(chat.router)
     app.include_router(research.router)
+    app.include_router(evaluation.router)
     return app
 
 

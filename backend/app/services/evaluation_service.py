@@ -23,7 +23,7 @@ from io import BytesIO
 from statistics import fmean
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -430,3 +430,19 @@ class EvaluationService:
         if run is None:
             raise NotFoundError("Evaluation run not found.", details={"run_id": run_id})
         return run
+
+    @staticmethod
+    def list_runs(db: Session, *, limit: int) -> tuple[list[EvaluationRun], int]:
+        """Runs, newest first."""
+        total = db.scalar(select(func.count()).select_from(EvaluationRun)) or 0
+        runs = db.scalars(
+            select(EvaluationRun).order_by(EvaluationRun.created_at.desc()).limit(limit)
+        ).all()
+        return list(runs), total
+
+    def delete_run(self, db: Session, run_id: str) -> None:
+        run = self.get_run(db, run_id)
+        if run.status in (EvaluationRunStatus.PENDING, EvaluationRunStatus.RUNNING):
+            raise ConflictError("This run is still in progress.", code="evaluation_running")
+        db.delete(run)
+        db.commit()
