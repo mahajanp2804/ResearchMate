@@ -49,7 +49,7 @@ acceptance criteria each phase must meet before the next one starts.
 | Document filtering | Applied **inside** each retriever (FAISS `IDSelector`, BM25 score mask) | Out-of-scope chunks can never reach fusion, reranking or the LLM prompt. |
 | Fusion | Reciprocal Rank Fusion, `k = 60` | Rank-based, so dense cosine scores and BM25 scores never need to be put on the same scale. |
 | Grounding gate *(revised in Phase 6)* | Refuse **without calling the LLM** whenever retrieval yields no context. A reranker-score threshold (`MIN_RERANK_SCORE`) exists but is **off by default**; otherwise the strict grounding prompt (Phase 7) and citation validation (Phase 8) decide | Measured with `ms-marco-MiniLM-L-6-v2`: answerable paraphrased research questions scored as low as −11.1 and unanswerable ones as high as −9.9, so no threshold separates them, although the right passage ranked 1st in 9/12 and 2nd in 3/12. Phase 11 measures refusal accuracy and can re-enable the gate with a better-calibrated reranker. |
-| Reranking value | Reranking is on (spec requirement) but its benefit is not assumed | On small research-paper tests it was mixed: it lifted a paraphrase's answer into the top 3 but demoted the right passage for "Which datasets were used?" when all scores sat near the noise floor. Phase 11 compares hybrid vs hybrid + rerank (and a stronger cross-encoder) on real numbers. |
+| Reranking value | Reranking is on (spec requirement); Phase 11 measured its benefit | On the sample collection it gives the best ranking (MRR 0.786 vs 0.699 for hybrid without it), mostly on paraphrased and two-paper questions, at about 270 ms per query on a laptop CPU. See *Phase 11 results* below. |
 | Context de-duplication | Drop a passage whose words overlap a kept one by Jaccard ≥ 0.8 or are ≥ 90% contained in it | Repeated sections and near-identical uploads waste context slots; neighbouring chunks share only their ~20% overlap. |
 | Citations | Sources numbered `[S1]…[Sn]` in the prompt; markers in the answer are parsed and validated against the sources actually sent, and markers for sources that weren't sent are removed before saving | The LLM never writes page numbers or file names itself, so it cannot invent them. |
 | Citation excerpts *(Phase 8)* | Code, not the model, picks the excerpt: the sentence of the cited passage that shares the most terms with the statements citing it, located on its exact page when a passage spans two pages | A model-written quote can be paraphrased or invented; a sentence copied from the stored passage cannot. The support score is lexical overlap, not entailment; Phase 11 measures faithfulness properly. |
@@ -77,6 +77,10 @@ acceptance criteria each phase must meet before the next one starts.
 | Checks on findings | In code: a stated limitation may only cite its own paper (other citations are removed); a recurring challenge or a difference must cite at least two papers; every finding needs a valid citation. Failing findings are left out and listed with the reason | Overstating a pattern ("both papers…" resting on one) or attributing a limitation to the wrong paper is how a model most easily misleads here; checking it in code makes the claim verifiable, and listing what was left out keeps the filter transparent. |
 | Scope of gap claims | A fixed scope note written by the code ("based only on the N selected papers…"), the prompt forbids novelty claims, and wording such as "unexplored", "no prior work" or "gap in the literature" is flagged on the finding | A handful of uploaded papers cannot show that a gap is new; the flag catches the model saying so anyway. |
 | Saved gap analyses | Keyed by the set of papers (in any order) and their chunking signatures and embedding model; deleting a paper deletes the analyses that include it | A reload or a repeat request costs no model call. Unlike chat answers, which keep their sources as a record, a cache should not keep a deleted paper's text. |
+| Evaluation collection *(Phase 11)* | Five short **synthetic** papers (original text, fictional methods and results) generated as PDFs on demand, and a hand-written dataset of 35 questions in five categories (factual, paraphrase, exact term, two papers, unanswerable) with exact evidence sentences and reference answers | Reproducible on any machine with no copyrighted PDFs in the repo, and the categories show *where* each retriever wins. Papers are referred to by title, so a dataset can also target a user's own papers. |
+| Relevance judgement | A retrieved passage is relevant if it belongs to the evidence's paper and contains the evidence text (compared on letters and digits only) | Chunk ids change whenever chunking settings change; evidence text does not. A test checks every evidence sentence lands whole in a chunk, which the sentence-aware chunker guarantees. |
+| Answer metrics | Optional and LLM-judged: the pipeline answers each question, the answer is split into statements in code, and one judge call rates faithfulness (per statement), context relevance (per passage), answer relevance and correctness (1-5). Refusals are checked in code against the question's category | Stored and shown apart from the retrieval metrics, which involve no model. The judge is usually the model that answered, so its scores are labelled indicative; the run records which models were used. |
+| Schema changes | At startup, nullable columns that a newer version added are added to existing tables; anything else is refused with a clear error | `create_all` never alters existing tables. This keeps upgrades working for a local SQLite app; Alembic migrations come with PostgreSQL support. |
 
 ### Decision (Phase 3): chunk size vs. embedding window
 
@@ -124,13 +128,14 @@ ResearchMate/
 │   │   │   ├── paper_profile_service.py  # per-paper cited aspects behind summaries + comparisons
 │   │   │   ├── research_service.py       # summaries and comparisons on top of profiles
 │   │   │   ├── research_gap_service.py   # stated / observed / inferred findings, checked in code
-│   │   │   └── evaluation_service.py  activity_service.py  stats_service.py  chat_service.py
+│   │   │   ├── evaluation_service.py  evaluation_data.py  retrieval_metrics.py  answer_evaluation.py
+│   │   │   └── activity_service.py  stats_service.py  chat_service.py
 │   │   ├── prompts/
-│   │   │   ├── answer_prompt.py  rewrite_prompt.py  profile_prompt.py  research_gap_prompt.py
+│   │   │   ├── answer_prompt.py  rewrite_prompt.py  profile_prompt.py  research_gap_prompt.py  judge_prompt.py
 │   │   └── utils/
 │   │       ├── logging.py  file_validation.py
-│   ├── evaluation/datasets/      # curated evaluation questions (JSON)
-│   ├── scripts/                  # sample-paper generator, CLI evaluation runner
+│   ├── evaluation/               # sample_papers.json (synthetic collection), datasets/*.json
+│   ├── scripts/                  # run_evaluation.py: command-line evaluation runner
 │   ├── tests/                    # pytest suite + fixture PDFs
 │   ├── requirements.txt  requirements-dev.txt  pyproject.toml
 │   ├── .env.example  Dockerfile
@@ -254,6 +259,28 @@ commands to verify it. A phase is not "done" until its tests pass.
 - Curated dataset (questions, expected documents/pages/evidence, reference answers) over a reproducible sample collection.
 - Precision@K, Recall@K, MRR for dense / BM25 / hybrid / hybrid+rerank; optional LLM-judged faithfulness, answer relevance and context relevance shown separately.
 - `POST /api/evaluation/run`, `GET /api/evaluation/results`; runs stored in SQLite.
+- **Status: done.** `GET /api/evaluation/datasets`, `POST /api/evaluation/sample-papers`, `POST /api/evaluation/run` (runs in the background, with progress), `GET /api/evaluation/results[/{id}]` and `DELETE`. The RAG Evaluation page installs the sample papers, runs experiments, and charts P@K, R@K, hit rate and MRR per method and per question type (Recharts), with a table of every number, per-question ranks, LLM-judged answer scores in a separate section, and the run history. `python -m scripts.run_evaluation` runs the same evaluation from the command line in a temporary data directory.
+
+#### Phase 11 results (retrieval, measured)
+
+Sample collection: 5 papers, 35 chunks; 31 answerable questions. Measured 13 Nov 2026 on an Apple Silicon laptop (CPU) with `all-MiniLM-L6-v2`, `ms-marco-MiniLM-L-6-v2`, 250-token chunks with 50 overlap and RRF k = 60. Two runs in the app gave identical numbers.
+
+| Method | P@1 | P@5 | R@1 | R@3 | R@5 | R@10 | MRR | ms / query |
+|---|---|---|---|---|---|---|---|---|
+| Dense | 0.452 | 0.194 | 0.452 | 0.677 | 0.823 | 0.903 | 0.617 | 9.1 |
+| BM25 | 0.581 | 0.206 | 0.548 | 0.774 | 0.871 | 0.919 | 0.713 | 0.8 |
+| Hybrid (RRF) | 0.548 | 0.200 | 0.532 | 0.742 | 0.871 | **0.968** | 0.699 | 9.1 |
+| Hybrid + rerank | **0.677** | **0.213** | **0.629** | **0.806** | **0.903** | 0.952 | **0.786** | 268.7 |
+
+MRR by question type (number of questions in brackets): factual (12) 0.688 / 0.762 / 0.786 / 0.777; exact term (6) 0.875 / 1.000 / 1.000 / 1.000; two papers (3) 0.344 / 0.556 / 0.400 / 0.733; paraphrase (10) 0.458 / 0.528 / 0.503 / 0.683 (dense / BM25 / hybrid / hybrid + rerank).
+
+What this shows, and what it doesn't:
+- Reranking gives the best ranking overall and helps most where wording differs (paraphrases +0.18 MRR over hybrid) and on two-paper questions, at ~270 ms per query on CPU.
+- Fusion finds the most evidence within 10 passages (R@10 0.968), but its MRR is slightly below BM25 here: a weaker dense ranking can push BM25's top hit down.
+- BM25 beats dense even on the paraphrase questions. Five short papers with distinctive vocabulary favour lexical matching; this is not evidence that dense retrieval is weak in general.
+- The collection is tiny (35 chunks, so top-10 covers almost a third of it): R@10 is inflated, and with 3-12 questions per category, differences of a few hundredths are noise. MRR, P@1 and R@1-3 are the informative columns.
+- P@5 is capped near 0.2 because most questions have one relevant passage.
+- Answer quality was implemented and tested with a scripted model but **not measured with Gemini** (no API key during development). Run it with "Judge answers" in the app or `--answers` on the command line.
 
 ### Phase 12 — Frontend integration
 - Papers (upload with progress, status polling, delete, reindex), Assistant (scoped chat, citations, source viewer), Comparison table, Insights, Evaluation charts (Recharts), Settings.
