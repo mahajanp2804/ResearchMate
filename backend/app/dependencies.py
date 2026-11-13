@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.database import Database
+from app.services.evaluation_service import EvaluationService
 from app.services.ingestion_service import IngestionService
 from app.services.paper_profile_service import PaperProfileService
 from app.services.rag_pipeline import RagPipeline
@@ -39,6 +40,10 @@ def get_gaps(request: Request) -> ResearchGapService:
     return request.app.state.gaps
 
 
+def get_evaluation(request: Request) -> EvaluationService:
+    return request.app.state.evaluation
+
+
 def get_database(request: Request) -> Database:
     return request.app.state.database
 
@@ -62,3 +67,4 @@ RetrievalDep = Annotated[RetrievalService, Depends(get_retrieval)]
 RagDep = Annotated[RagPipeline, Depends(get_rag)]
 ProfilesDep = Annotated[PaperProfileService, Depends(get_profiles)]
 GapsDep = Annotated[ResearchGapService, Depends(get_gaps)]
+EvaluationDep = Annotated[EvaluationService, Depends(get_evaluation)]

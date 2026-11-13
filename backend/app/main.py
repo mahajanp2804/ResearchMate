@@ -22,6 +22,7 @@ from app.exceptions import ResearchMateError
 from app.routers import chat, documents, research, retrieval, system
 from app.services.bm25_service import BM25Service
 from app.services.embedding_service import get_sentence_transformer_embedder
+from app.services.evaluation_service import EvaluationService
 from app.services.ingestion_service import EmbedderProvider, IngestionService, TokenizerProvider
 from app.services.llm_service import cached_provider, create_llm_provider
 from app.services.paper_profile_service import PaperProfileService
@@ -131,6 +132,7 @@ def create_app(
         settings.ensure_directories()
         database.create_tables()
         ingestion.reconcile()
+        app.state.evaluation.reconcile()
         if not settings.llm_configured:
             logger.warning("GEMINI_API_KEY is not set; question answering will be unavailable")
         logger.info("%s %s started", settings.app_name, settings.app_version)
@@ -160,6 +162,12 @@ def create_app(
     )
     app.state.gaps = ResearchGapService(
         settings=settings, retrieval=app.state.retrieval, llm_provider=llm_provider
+    )
+    app.state.evaluation = EvaluationService(
+        settings=settings,
+        database=database,
+        ingestion=ingestion,
+        retrieval=app.state.retrieval,
     )
 
     app.add_middleware(
