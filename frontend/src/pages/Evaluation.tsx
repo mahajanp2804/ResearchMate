@@ -67,7 +67,8 @@ export default function Evaluation() {
         />
       )}
 
-      <RetrievalPlayground />
+      {/* Remounts once the papers are searchable, so its paper list is current. */}
+      <RetrievalPlayground key={dataset?.ready ? 'ready' : 'waiting'} />
     </div>
   )
 }
