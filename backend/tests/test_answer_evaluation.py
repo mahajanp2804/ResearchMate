@@ -109,6 +109,11 @@ def test_answers_are_generated_checked_and_judged(library: FastAPI, llm) -> None
     assert summary["unanswerable_refused"] == 1.0 and summary["answerable_answered"] == 1.0
     for metric in ("faithfulness", "answer_relevance", "context_relevance", "correctness"):
         assert summary[metric] == 1.0, metric
+    # The models that actually answered and judged are recorded.
+    assert run.metrics["answers"]["models"] == {
+        "answer": "scripted-model",
+        "judge": "scripted-model",
+    }
     # Retrieval metrics are still there, separately.
     assert run.metrics["retrieval"]["bm25"]["questions"] == 31
 

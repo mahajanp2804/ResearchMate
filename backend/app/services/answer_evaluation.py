@@ -48,6 +48,14 @@ def _mean(values: list[float | None]) -> float | None:
     return round(fmean(present), 4) if present else None
 
 
+def models_used(entries: list[dict[str, Any]]) -> dict[str, str | None]:
+    """The models that actually answered and judged (as the provider reported them)."""
+    return {
+        "answer": next((e["model"] for e in entries if e.get("model")), None),
+        "judge": next((e["judge_model"] for e in entries if e.get("judge_model")), None),
+    }
+
+
 def summarise_answers(entries: list[dict[str, Any]]) -> dict[str, Any]:
     """Mean scores over the questions evaluated so far."""
     answerable = [e for e in entries if e["category"] != "unanswerable"]
@@ -94,7 +102,10 @@ class AnswerEvaluator:
                 run.per_question_results = list(results)
                 run.metrics = {
                     **run.metrics,
-                    "answers": {"summary": summarise_answers(entries)},
+                    "answers": {
+                        "summary": summarise_answers(entries),
+                        "models": models_used(entries),
+                    },
                     "progress": {"phase": "answers", "done": index + 1, "total": len(questions)},
                 }
                 db.commit()
@@ -104,6 +115,7 @@ class AnswerEvaluator:
                 **run.metrics,
                 "answers": {
                     "summary": summarise_answers(entries),
+                    "models": models_used(entries),
                     "stopped_after": len(entries),
                 },
             }
