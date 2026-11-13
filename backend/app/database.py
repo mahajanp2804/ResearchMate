@@ -8,7 +8,7 @@ whole application at a temporary database without touching globals.
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -43,6 +43,44 @@ class Database:
         import app.models  # noqa: F401
 
         Base.metadata.create_all(self.engine)
+        self.add_missing_columns()
+
+    def add_missing_columns(self) -> list[str]:
+        """Add nullable columns that newer versions of the models introduced.
+
+        ``create_all`` creates missing tables but never changes existing ones,
+        so a database made by an earlier version would lack new columns and
+        every query on that table would fail. Nullable columns can be added
+        safely; anything else needs a real migration (Alembic, planned with
+        PostgreSQL support), so it is refused with a clear error instead.
+        Returns the columns added, as "table.column".
+        """
+        inspector = inspect(self.engine)
+        quote = self.engine.dialect.identifier_preparer.quote
+        added: list[str] = []
+        with self.engine.begin() as connection:
+            for table in Base.metadata.sorted_tables:
+                if not inspector.has_table(table.name):
+                    continue
+                existing = {column["name"] for column in inspector.get_columns(table.name)}
+                for column in table.columns:
+                    if column.name in existing:
+                        continue
+                    if not column.nullable:
+                        raise RuntimeError(
+                            f"The database is missing the required column {table.name}."
+                            f"{column.name}. Back up and delete the data directory, or "
+                            "migrate the database by hand."
+                        )
+                    column_type = column.type.compile(dialect=self.engine.dialect)
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE {quote(table.name)} "
+                            f"ADD COLUMN {quote(column.name)} {column_type}"
+                        )
+                    )
+                    added.append(f"{table.name}.{column.name}")
+        return added
 
     @contextmanager
     def session(self) -> Iterator[Session]:
