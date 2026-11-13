@@ -40,7 +40,7 @@ function Tile({ label, value, description }: { label: string; value: string; des
 /** LLM-judged answer scores, kept visibly apart from the retrieval metrics. */
 export function AnswerQuality({ run }: { run: EvaluationRunSummary }) {
   const answers = run.metrics.answers
-  const model = run.config.settings.llm_model
+  const judge = answers?.models?.judge
 
   return (
     <Card>
@@ -88,7 +88,7 @@ export function AnswerQuality({ run }: { run: EvaluationRunSummary }) {
               Scores are averaged over the {answers.summary.answered} answers given
               {answers.stopped_after !== undefined &&
                 ` (the run stopped after ${answers.stopped_after} questions)`}
-              . The judge{model ? ` (${model})` : ''} is a language model, usually the one that
+              . The judge{judge ? ` (${judge})` : ''} is a language model, usually the one that
               wrote the answers, so treat these as indicative rather than ground truth.
             </p>
           </>

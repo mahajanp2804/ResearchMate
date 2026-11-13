@@ -534,7 +534,12 @@ export interface EvaluationRunSummary {
     progress?: EvaluationProgress
     retrieval?: Partial<Record<SearchMethod, RetrievalSummary>>
     retrieval_by_category?: Partial<Record<SearchMethod, Partial<Record<QuestionCategory, RetrievalSummary>>>>
-    answers?: { summary: AnswerSummary; stopped_after?: number }
+    answers?: {
+      summary: AnswerSummary
+      /** The models that actually answered and judged. */
+      models?: { answer: string | null; judge: string | null }
+      stopped_after?: number
+    }
   }
   error_message: string | null
   created_at: string
