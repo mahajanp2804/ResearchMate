@@ -37,6 +37,11 @@ class EvaluationQuestion(Base):
         ForeignKey("evaluation_datasets.id", ondelete="CASCADE"), nullable=False, index=True
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
+    # Stable id from the dataset file (e.g. "q07"), so runs can be compared.
+    key: Mapped[str | None] = mapped_column(String(64))
+    # factual, paraphrase, keyword, multi_paper or unanswerable: lets results
+    # show, for example, that dense search finds paraphrases BM25 misses.
+    category: Mapped[str | None] = mapped_column(String(32))
     expected_document_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     expected_chunk_ids: Mapped[list[int]] = mapped_column(JSON, default=list, nullable=False)
     # Ground-truth passages as {"document_id", "page", "text"}. Chunk ids change
