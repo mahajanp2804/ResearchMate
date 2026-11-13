@@ -1,0 +1,328 @@
+{
+  "name": "Sample papers",
+  "description": "35 hand-written questions over the five bundled sample papers: factual questions, paraphrases that share few words with the paper, keyword questions about exact numbers or names, questions that need two papers, and questions the papers cannot answer.",
+  "sample_collection": true,
+  "papers": {
+    "proxavg": "ProxAvg: Proximal Local Objectives for Federated Optimization on Heterogeneous Devices",
+    "driftguard": "DriftGuard: Correcting Client Drift in Federated Learning with Control Variates",
+    "fuserank": "FuseRank: Combining Lexical and Dense Retrieval for Grounded Question Answering",
+    "layeralign": "LayerAlign: Compact Student Models through Layer-Aligned Knowledge Distillation",
+    "solvgat": "SolvGAT: Graph Attention Networks for Predicting Aqueous Solubility of Small Molecules"
+  },
+  "questions": [
+    {
+      "key": "q01",
+      "category": "factual",
+      "question": "What does ProxAvg add to each device's local objective?",
+      "evidence": [
+        {"paper": "proxavg", "text": "Instead of minimising its local loss alone, device k minimises the local loss plus a penalty equal to mu divided by two times the squared distance between its weights and the global weights received at the start of the round."}
+      ],
+      "reference_answer": "A proximal penalty: mu/2 times the squared distance between the device's weights and the global weights from the start of the round, which keeps local models close to the global model."
+    },
+    {
+      "key": "q02",
+      "category": "paraphrase",
+      "question": "How does the proximal method deal with phones that cannot finish their assigned training in time?",
+      "evidence": [
+        {"paper": "proxavg", "text": "ProxAvg also accepts partial work, letting slow devices return fewer local steps instead of being dropped."},
+        {"paper": "proxavg", "text": "the server accepts whatever a device returns by the deadline rather than discarding stragglers."}
+      ],
+      "reference_answer": "It accepts partial work: slow devices return whatever local progress they made by the deadline instead of being dropped."
+    },
+    {
+      "key": "q03",
+      "category": "keyword",
+      "question": "Which value of mu worked best on Shakespeare?",
+      "evidence": [
+        {"paper": "proxavg", "text": "mu equal to 0.01 worked best on Shakespeare and mu equal to 1 on MNIST."}
+      ],
+      "reference_answer": "mu = 0.01."
+    },
+    {
+      "key": "q04",
+      "category": "factual",
+      "question": "Which datasets are used to evaluate ProxAvg?",
+      "evidence": [
+        {"paper": "proxavg", "text": "We evaluate on four federated benchmarks. MNIST and FEMNIST are image classification tasks"}
+      ],
+      "reference_answer": "MNIST, FEMNIST, Shakespeare and Sent140."
+    },
+    {
+      "key": "q05",
+      "category": "factual",
+      "question": "What assumption does the ProxAvg convergence analysis rely on?",
+      "evidence": [
+        {"paper": "proxavg", "text": "We analyse ProxAvg under a bounded dissimilarity assumption, which limits how different the gradients of local objectives can be from the global gradient."},
+        {"paper": "proxavg", "text": "Our convergence analysis relies on the bounded dissimilarity assumption, which may not hold for adversarial or extremely skewed federations."}
+      ],
+      "reference_answer": "Bounded dissimilarity: the local gradients cannot differ too much from the global gradient. The authors note it may not hold for adversarial or extremely skewed federations."
+    },
+    {
+      "key": "q06",
+      "category": "paraphrase",
+      "question": "How much better is the proximal approach than plain averaging when the data across devices is very uneven?",
+      "evidence": [
+        {"paper": "proxavg", "text": "On the most heterogeneous partitions ProxAvg improves absolute test accuracy by 18 percentage points on average over plain averaging."}
+      ],
+      "reference_answer": "About 18 percentage points of absolute test accuracy on average on the most heterogeneous partitions."
+    },
+    {
+      "key": "q07",
+      "category": "factual",
+      "question": "What is client drift?",
+      "evidence": [
+        {"paper": "driftguard", "text": "on heterogeneous data each client moves toward the minimiser of its own loss. We call this effect client drift."}
+      ],
+      "reference_answer": "On heterogeneous data, each client's local steps move it toward the minimiser of its own loss instead of the global one."
+    },
+    {
+      "key": "q08",
+      "category": "keyword",
+      "question": "How many communication rounds does DriftGuard need to reach 0.5 test accuracy on EMNIST?",
+      "evidence": [
+        {"paper": "driftguard", "text": "On EMNIST, DriftGuard reaches 0.5 test accuracy in 31 rounds, compared with 148 rounds for federated averaging and 92 rounds for the proximal baseline."}
+      ],
+      "reference_answer": "31 rounds, compared with 148 for federated averaging and 92 for the proximal baseline."
+    },
+    {
+      "key": "q09",
+      "category": "paraphrase",
+      "question": "What extra cost does the control-variate method impose on the network?",
+      "evidence": [
+        {"paper": "driftguard", "text": "The price is that each round transmits a correction vector in addition to the model, which doubles the upload size."},
+        {"paper": "driftguard", "text": "DriftGuard doubles the upload per round because each client sends its control variate update together with the model update."}
+      ],
+      "reference_answer": "It doubles the upload per round, because each client sends its control variate update along with the model update."
+    },
+    {
+      "key": "q10",
+      "category": "factual",
+      "question": "How does DriftGuard correct each local gradient step?",
+      "evidence": [
+        {"paper": "driftguard", "text": "During local training, client i corrects every stochastic gradient by subtracting c_i and adding c, so that its update follows the global direction rather than its local one."}
+      ],
+      "reference_answer": "Each stochastic gradient is corrected by subtracting the client control variate c_i and adding the server control variate c, so the update follows the global direction."
+    },
+    {
+      "key": "q11",
+      "category": "keyword",
+      "question": "What learning rate, number of local epochs and batch size do DriftGuard clients use?",
+      "evidence": [
+        {"paper": "driftguard", "text": "Clients use a learning rate of 0.05 and five local epochs with a batch size of 50."}
+      ],
+      "reference_answer": "A learning rate of 0.05, five local epochs and a batch size of 50."
+    },
+    {
+      "key": "q12",
+      "category": "paraphrase",
+      "question": "Why is the method a poor fit for devices that take part in training only once?",
+      "evidence": [
+        {"paper": "driftguard", "text": "Clients must also store their control variate between rounds, which is a problem for clients that participate only once or rarely, since their stored variate becomes stale."}
+      ],
+      "reference_answer": "Clients have to keep their control variate between rounds, and for clients that participate once or rarely the stored variate becomes stale."
+    },
+    {
+      "key": "q13",
+      "category": "factual",
+      "question": "How does FuseRank combine the dense and BM25 rankings?",
+      "evidence": [
+        {"paper": "fuserank", "text": "it uses reciprocal rank fusion, which gives each passage the sum of one divided by k plus its rank in each list, with k equal to 60."}
+      ],
+      "reference_answer": "With reciprocal rank fusion: each passage scores the sum of 1/(k + rank) over both lists, with k = 60, instead of combining raw scores."
+    },
+    {
+      "key": "q14",
+      "category": "keyword",
+      "question": "What recall at 10 does BM25 reach on TechDocQA?",
+      "evidence": [
+        {"paper": "fuserank", "text": "Dense retrieval reaches a recall at 10 of 0.71 and BM25 reaches 0.64, but on questions with exact identifiers BM25 is better by 19 points."}
+      ],
+      "reference_answer": "0.64, although BM25 is 19 points better than dense retrieval on questions with exact identifiers."
+    },
+    {
+      "key": "q15",
+      "category": "paraphrase",
+      "question": "What weakness of neural embeddings motivates adding keyword search?",
+      "evidence": [
+        {"paper": "fuserank", "text": "Embedding models map questions and passages into a shared vector space, which captures meaning but blurs exact strings such as error codes, version numbers and product names."}
+      ],
+      "reference_answer": "Embeddings capture meaning but blur exact strings such as error codes, version numbers and product names."
+    },
+    {
+      "key": "q16",
+      "category": "factual",
+      "question": "How much latency does the cross-encoder add in FuseRank?",
+      "evidence": [
+        {"paper": "fuserank", "text": "The cross-encoder adds about 120 milliseconds of latency per question on a CPU, which may be too slow for interactive use on large candidate sets."}
+      ],
+      "reference_answer": "About 120 milliseconds per question on a CPU."
+    },
+    {
+      "key": "q17",
+      "category": "factual",
+      "question": "How many passages does FuseRank pass to the generator after reranking?",
+      "evidence": [
+        {"paper": "fuserank", "text": "The top 20 fused candidates are then scored by a cross-encoder that reads the question and each passage together, and the best eight passages are passed to the generator."}
+      ],
+      "reference_answer": "Eight, chosen by the cross-encoder from the top 20 fused candidates."
+    },
+    {
+      "key": "q18",
+      "category": "paraphrase",
+      "question": "By how much does the full system reduce answers that make claims the sources do not back up?",
+      "evidence": [
+        {"paper": "fuserank", "text": "Unsupported claims in generated answers fall from 14 percent with dense retrieval to 6 percent with FuseRank."}
+      ],
+      "reference_answer": "Unsupported claims fall from 14 percent with dense retrieval to 6 percent with FuseRank."
+    },
+    {
+      "key": "q19",
+      "category": "factual",
+      "question": "How does LayerAlign decide which teacher layer each student layer should imitate?",
+      "evidence": [
+        {"paper": "layeralign", "text": "LayerAlign first measures how similar each teacher layer is to each student layer at initialisation using centred kernel alignment on a small batch of unlabelled text."},
+        {"paper": "layeralign", "text": "It then solves a monotone assignment problem so that lower student layers map to lower teacher layers and the total similarity is maximised."}
+      ],
+      "reference_answer": "It measures layer similarity with centred kernel alignment at initialisation, then solves a monotone assignment that maps lower student layers to lower teacher layers while maximising total similarity."
+    },
+    {
+      "key": "q20",
+      "category": "keyword",
+      "question": "What temperature is used for the softened outputs in LayerAlign?",
+      "evidence": [
+        {"paper": "layeralign", "text": "the cross-entropy between softened teacher and student outputs with a temperature of 4"}
+      ],
+      "reference_answer": "A temperature of 4."
+    },
+    {
+      "key": "q21",
+      "category": "paraphrase",
+      "question": "How much faster is the six-layer compressed model, and how much of the original quality does it keep?",
+      "evidence": [
+        {"paper": "layeralign", "text": "The six-layer student keeps 97 percent of the average GLUE score of the teacher and is 2.1 times faster"}
+      ],
+      "reference_answer": "It is 2.1 times faster and keeps 97 percent of the teacher's average GLUE score."
+    },
+    {
+      "key": "q22",
+      "category": "paraphrase",
+      "question": "Why can this technique not compress models that are only offered through a hosted service?",
+      "evidence": [
+        {"paper": "layeralign", "text": "LayerAlign requires access to the internal states of the teacher, so it cannot distil from models that are only available through an API."}
+      ],
+      "reference_answer": "It needs the teacher's internal states, which models available only through an API do not expose."
+    },
+    {
+      "key": "q23",
+      "category": "factual",
+      "question": "Which loss matters most in the LayerAlign ablation?",
+      "evidence": [
+        {"paper": "layeralign", "text": "Removing the attention loss costs one point on average, and removing the hidden-state loss costs three."}
+      ],
+      "reference_answer": "The hidden-state loss: removing it costs three points, against one point for the attention loss."
+    },
+    {
+      "key": "q24",
+      "category": "factual",
+      "question": "What error does SolvGAT achieve on the ESOL test split?",
+      "evidence": [
+        {"paper": "solvgat", "text": "SolvGAT reaches a root mean squared error of 0.52 log units on the scaffold test split"}
+      ],
+      "reference_answer": "A root mean squared error of 0.52 log units on the scaffold test split."
+    },
+    {
+      "key": "q25",
+      "category": "paraphrase",
+      "question": "Which chemical groups does the model pay most attention to?",
+      "evidence": [
+        {"paper": "solvgat", "text": "Visualising attention shows that hydroxyl, amine and carboxyl groups receive the highest weights, consistent with their known effect on solubility."}
+      ],
+      "reference_answer": "Hydroxyl, amine and carboxyl groups."
+    },
+    {
+      "key": "q26",
+      "category": "keyword",
+      "question": "How many molecules are in the ESOL dataset?",
+      "evidence": [
+        {"paper": "solvgat", "text": "We use the ESOL dataset of 1,128 molecules with measured aqueous solubility"}
+      ],
+      "reference_answer": "1,128 molecules."
+    },
+    {
+      "key": "q27",
+      "category": "factual",
+      "question": "What features represent each atom in SolvGAT?",
+      "evidence": [
+        {"paper": "solvgat", "text": "SolvGAT represents each atom by its element, degree, formal charge, hybridisation and aromaticity"}
+      ],
+      "reference_answer": "Its element, degree, formal charge, hybridisation and aromaticity."
+    },
+    {
+      "key": "q28",
+      "category": "paraphrase",
+      "question": "What physical factors does the solubility model leave out?",
+      "evidence": [
+        {"paper": "solvgat", "text": "SolvGAT ignores three-dimensional conformation and temperature, both of which affect solubility."}
+      ],
+      "reference_answer": "Three-dimensional conformation and temperature."
+    },
+    {
+      "key": "q29",
+      "category": "multi_paper",
+      "question": "How do ProxAvg and DriftGuard differ in how they handle heterogeneous client data?",
+      "evidence": [
+        {"paper": "proxavg", "text": "Instead of minimising its local loss alone, device k minimises the local loss plus a penalty equal to mu divided by two times the squared distance between its weights and the global weights received at the start of the round."},
+        {"paper": "driftguard", "text": "During local training, client i corrects every stochastic gradient by subtracting c_i and adding c, so that its update follows the global direction rather than its local one."}
+      ],
+      "reference_answer": "ProxAvg adds a proximal penalty that keeps local weights near the global model, while DriftGuard corrects every local gradient with control variates so updates follow the global direction."
+    },
+    {
+      "key": "q30",
+      "category": "multi_paper",
+      "question": "Which datasets do the two federated learning papers evaluate on?",
+      "evidence": [
+        {"paper": "proxavg", "text": "We evaluate on four federated benchmarks. MNIST and FEMNIST are image classification tasks"},
+        {"paper": "driftguard", "text": "We evaluate DriftGuard on the extended MNIST dataset EMNIST with 400 simulated clients"}
+      ],
+      "reference_answer": "ProxAvg uses MNIST, FEMNIST, Shakespeare and Sent140; DriftGuard uses EMNIST and CIFAR-10."
+    },
+    {
+      "key": "q31",
+      "category": "multi_paper",
+      "question": "What assumptions limit the convergence theory of the two federated learning methods?",
+      "evidence": [
+        {"paper": "proxavg", "text": "Our convergence analysis relies on the bounded dissimilarity assumption, which may not hold for adversarial or extremely skewed federations."},
+        {"paper": "driftguard", "text": "Our theory assumes full gradients for the variance analysis and strongly convex losses for the main rate."}
+      ],
+      "reference_answer": "ProxAvg assumes bounded dissimilarity between local and global gradients; DriftGuard assumes full gradients for its variance analysis and strongly convex losses for its main rate."
+    },
+    {
+      "key": "q32",
+      "category": "unanswerable",
+      "question": "Which GPU was used to train the ProxAvg models?",
+      "evidence": [],
+      "reference_answer": null
+    },
+    {
+      "key": "q33",
+      "category": "unanswerable",
+      "question": "What BLEU score does LayerAlign reach on machine translation?",
+      "evidence": [],
+      "reference_answer": null
+    },
+    {
+      "key": "q34",
+      "category": "unanswerable",
+      "question": "How many trainable parameters does the SolvGAT model have?",
+      "evidence": [],
+      "reference_answer": null
+    },
+    {
+      "key": "q35",
+      "category": "unanswerable",
+      "question": "What differential privacy guarantee does DriftGuard provide?",
+      "evidence": [],
+      "reference_answer": null
+    }
+  ]
+}
