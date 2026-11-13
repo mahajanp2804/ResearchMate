@@ -456,3 +456,127 @@ export interface GapAnalysis {
   cached: boolean
   truncated: boolean
 }
+
+// --- Evaluation ----------------------------------------------------------------
+
+export type QuestionCategory = 'factual' | 'paraphrase' | 'keyword' | 'multi_paper' | 'unanswerable'
+
+export interface EvaluationPaper {
+  key: string
+  title: string
+  /** The uploaded paper with this exact title, if any. */
+  document_id: string | null
+  indexing_status: IndexingStatus | null
+}
+
+export interface EvaluationDataset {
+  slug: string
+  name: string
+  description: string
+  sample_collection: boolean
+  question_count: number
+  categories: Partial<Record<QuestionCategory, number>>
+  papers: EvaluationPaper[]
+  /** Every paper is uploaded and searchable, so a run can start. */
+  ready: boolean
+}
+
+export interface DatasetListResponse {
+  items: EvaluationDataset[]
+}
+
+export interface SamplePapersResponse {
+  papers: { title: string; document_id: string; status: 'created' | 'existing' | 'duplicate' }[]
+}
+
+/**
+ * Mean retrieval metrics over a run's answerable questions: `precision@k`,
+ * `recall@k` and `hit@k` for k in the run's cut-offs, plus `mrr`.
+ */
+export type RetrievalSummary = Record<string, number | null> & {
+  questions: number
+  mrr: number
+  mean_latency_ms?: number | null
+}
+
+export interface AnswerSummary {
+  questions: number
+  answered: number
+  refused: number
+  refusal_accuracy: number | null
+  answerable_answered: number | null
+  unanswerable_refused: number | null
+  faithfulness: number | null
+  answer_relevance: number | null
+  context_relevance: number | null
+  correctness: number | null
+}
+
+export interface EvaluationProgress {
+  phase: 'pending' | 'retrieval' | 'answers' | 'done'
+  done: number
+  total: number
+}
+
+export interface EvaluationRunSummary {
+  id: string
+  dataset: string
+  dataset_name: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  config: {
+    methods: SearchMethod[]
+    answer_quality: boolean
+    top_k: number
+    cutoffs: number[]
+    settings: Record<string, string | number | null>
+  }
+  metrics: {
+    progress?: EvaluationProgress
+    retrieval?: Partial<Record<SearchMethod, RetrievalSummary>>
+    retrieval_by_category?: Partial<Record<SearchMethod, Partial<Record<QuestionCategory, RetrievalSummary>>>>
+    answers?: { summary: AnswerSummary; stopped_after?: number }
+  }
+  error_message: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface RetrievedForQuestion {
+  first_relevant_rank: number | null
+  evidence_ranks: (number | null)[]
+  reciprocal_rank: number
+  top: { chunk_id: number; document_id: string; page_start: number; page_end: number; relevant: boolean }[]
+  [metric: string]: unknown
+}
+
+export interface AnswerForQuestion {
+  outcome: 'answered' | 'no_evidence' | 'model_declined'
+  refused: boolean
+  refusal_correct: boolean
+  answer: string
+  faithfulness?: number | null
+  answer_relevance?: number | null
+  context_relevance?: number | null
+  correctness?: number | null
+  statements?: { text: string; supported: boolean | null }[]
+  judge_error?: string
+}
+
+export interface QuestionResult {
+  key: string
+  question: string
+  category: QuestionCategory
+  evidence: { document_id: string; page: number | null; text: string }[]
+  reference_answer: string | null
+  retrieval: Partial<Record<SearchMethod, RetrievedForQuestion>>
+  answer?: AnswerForQuestion
+}
+
+export interface EvaluationRunDetail extends EvaluationRunSummary {
+  per_question_results: QuestionResult[]
+}
+
+export interface EvaluationRunList {
+  items: EvaluationRunSummary[]
+  total: number
+}

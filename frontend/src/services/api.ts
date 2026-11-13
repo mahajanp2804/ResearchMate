@@ -7,12 +7,18 @@ import type {
   ConversationDetail,
   ConversationListResponse,
   DashboardStats,
+  DatasetListResponse,
   DocumentDetail,
   DocumentListResponse,
+  EvaluationRunDetail,
+  EvaluationRunList,
+  EvaluationRunSummary,
   GapAnalysis,
   HealthResponse,
   PaperProfile,
   ReindexResponse,
+  SamplePapersResponse,
+  SearchMethod,
   SearchRequest,
   SearchResponse,
   SystemInfo,
@@ -194,6 +200,24 @@ export const api = {
       body: JSON.stringify({ document_ids: documentIds, refresh }),
       signal,
     }),
+  evaluationDatasets: (signal?: AbortSignal) =>
+    request<DatasetListResponse>('/api/evaluation/datasets', { signal }),
+  /** Add the bundled synthetic sample papers to the library (indexing runs in the background). */
+  installSamplePapers: () =>
+    request<SamplePapersResponse>('/api/evaluation/sample-papers', { method: 'POST' }),
+  /** Start a run; it executes in the background, so poll `evaluationRun`. */
+  startEvaluation: (body: { dataset: string; methods: SearchMethod[]; answer_quality: boolean }) =>
+    request<EvaluationRunSummary>('/api/evaluation/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  evaluationRuns: (signal?: AbortSignal) =>
+    request<EvaluationRunList>('/api/evaluation/results?limit=50', { signal }),
+  evaluationRun: (runId: string, signal?: AbortSignal) =>
+    request<EvaluationRunDetail>(`/api/evaluation/results/${encodeURIComponent(runId)}`, { signal }),
+  deleteEvaluationRun: (runId: string) =>
+    request<null>(`/api/evaluation/results/${encodeURIComponent(runId)}`, { method: 'DELETE' }),
   /** URL of the original PDF, optionally opened at a 1-based page. */
   documentFileUrl: (documentId: string, page?: number) =>
     `${API_BASE_URL}/api/documents/${encodeURIComponent(documentId)}/file${page ? `#page=${page}` : ''}`,
