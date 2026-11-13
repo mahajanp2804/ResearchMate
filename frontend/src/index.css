@@ -31,6 +31,13 @@
   --danger-solid: #d92d20;
   --danger-solid-hover: #b42318;
 
+  /* Chart series, in fixed order (one per retrieval method). Validated for
+     colour-vision deficiency and contrast against --surface in each theme. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+
   color-scheme: light;
 }
 
@@ -58,6 +65,11 @@
   --danger-soft: rgb(249 112 102 / 0.12);
   --danger-solid: #d92d20;
   --danger-solid-hover: #f04438;
+
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
 
   color-scheme: dark;
 }
