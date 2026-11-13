@@ -167,9 +167,13 @@ def best_excerpt(source_text: str, claims: Sequence[str], title: str = "") -> tu
     return _shorten(excerpt), round(support, 3)
 
 
-def _letters_and_digits(text: str) -> str:
-    # Ignores whitespace, line-break hyphens and ligatures (NFKC), which differ
-    # between the cleaned passage and the raw page text.
+def letters_and_digits(text: str) -> str:
+    """Lowercase letters and digits only, for matching text across sources.
+
+    Ignores whitespace, punctuation, line-break hyphens and ligatures (NFKC),
+    which differ between cleaned passages, raw page text and hand-written
+    evaluation evidence.
+    """
     import unicodedata
 
     return re.sub(r"[^0-9a-z]", "", unicodedata.normalize("NFKC", text).lower())
@@ -179,13 +183,13 @@ def locate_page(page_texts: dict[int, str], excerpt: str, page_start: int, page_
     """The page of a multi-page passage on which ``excerpt`` appears."""
     if page_start == page_end:
         return page_start
-    key = _letters_and_digits(excerpt.rstrip("…"))
+    key = letters_and_digits(excerpt.rstrip("…"))
     for length in (PAGE_MATCH_CHARS, SHORT_PAGE_MATCH_CHARS):
         needle = key[:length]
         if not needle:
             break
         for page in range(page_start, page_end + 1):
-            if needle in _letters_and_digits(page_texts.get(page, "")):
+            if needle in letters_and_digits(page_texts.get(page, "")):
                 return page
     return page_start
 
