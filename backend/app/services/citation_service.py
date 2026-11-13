@@ -280,3 +280,27 @@ def citation_coverage(answer: str) -> Coverage:
     else:
         status = "cited"
     return Coverage(status=status, cited_statements=cited, uncited_statements=uncited)
+
+
+def answer_statements(answer: str) -> list[str]:
+    """The sentences of an answer that make a claim, without citation markers.
+
+    Headings, list introductions ("Key findings:") and fragments shorter than
+    MIN_CLAIM_WORDS are left out. Used to judge faithfulness statement by
+    statement.
+    """
+    from app.services.chunking_service import split_sentences
+
+    statements = []
+    for line in answer.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        for sentence in split_sentences(line):
+            statement = _strip_markers(sentence)
+            if statement.endswith(":"):
+                continue
+            if len(re.findall(r"[A-Za-z0-9]+", statement)) < MIN_CLAIM_WORDS:
+                continue
+            statements.append(statement)
+    return statements

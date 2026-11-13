@@ -214,3 +214,20 @@ def test_headings_list_intros_and_fragments_are_not_claims() -> None:
     coverage = citation_coverage(answer)
     assert coverage.status == "cited"
     assert coverage.cited_statements == 2
+
+
+def test_answer_statements_keep_only_claims() -> None:
+    from app.services.citation_service import answer_statements
+
+    answer = (
+        "## Summary\n"
+        "**Key findings:**\n"
+        "- FedProx adds a proximal term to the local objective [S1].\n"
+        "- It tolerates partial work from slow devices [S2]. Yes.\n"
+        "The datasets are MNIST and FEMNIST [S3][S4]."
+    )
+    assert answer_statements(answer) == [
+        "FedProx adds a proximal term to the local objective.",
+        "It tolerates partial work from slow devices.",
+        "The datasets are MNIST and FEMNIST.",
+    ]
