@@ -49,8 +49,8 @@ export default function Settings() {
           <div className="text-sm">
             <p className="font-medium text-fg">Gemini API key not configured</p>
             <p className="mt-0.5 text-fg-muted">
-              Paper uploads and search work without it, but answers, summaries and comparisons
-              need an LLM. Add <code className="font-mono text-xs">GEMINI_API_KEY</code> to{' '}
+              Uploads, search and retrieval evaluation work without it, but answers, summaries,
+              comparisons, gap analyses and answer judging need an LLM. Add <code className="font-mono text-xs">GEMINI_API_KEY</code> to{' '}
               <code className="font-mono text-xs">backend/.env</code> and restart the backend.
             </p>
           </div>
