@@ -119,13 +119,13 @@ function RecentDocuments({ documents }: { documents: RecentDocument[] }) {
             {document.indexing_status === 'indexed' ? (
               <Link
                 to={summaryUrl(document.id)}
-                className="block truncate text-sm font-medium text-fg hover:text-accent-text hover:underline"
+                className="line-clamp-2 text-sm font-medium text-fg hover:text-accent-text hover:underline"
                 title="Open the summary"
               >
                 {document.title ?? document.filename}
               </Link>
             ) : (
-              <p className="truncate text-sm font-medium text-fg">
+              <p className="line-clamp-2 text-sm font-medium text-fg">
                 {document.title ?? document.filename}
               </p>
             )}
@@ -260,8 +260,10 @@ export default function Dashboard() {
         />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
+      {/* min-w-0: grid items otherwise grow to fit their longest unwrapped title,
+          which pushes the cards off-screen on phones. */}
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <Card className="min-w-0 lg:col-span-3">
           <CardHeader
             title="Recently uploaded papers"
             description="The latest additions to your library"
@@ -279,7 +281,7 @@ export default function Dashboard() {
           {loading && !stats ? <ListSkeleton /> : stats && <RecentDocuments documents={stats.recent_documents} />}
         </Card>
 
-        <Card className="lg:col-span-2">
+        <Card className="min-w-0 lg:col-span-2">
           <CardHeader title="Recent activity" description="What happened in your workspace" />
           {loading && !stats ? <ListSkeleton /> : stats && <RecentActivity events={stats.recent_activity} />}
         </Card>
