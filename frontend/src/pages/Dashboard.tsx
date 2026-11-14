@@ -1,13 +1,17 @@
 import {
   Activity,
   ArrowRight,
+  BookOpenText,
   Database,
   FilePlus2,
   FileText,
+  FlaskConical,
   GitCompareArrows,
   Layers,
   Lightbulb,
   MessageSquareText,
+  RefreshCw,
+  Trash2,
   type LucideIcon,
 } from 'lucide-react'
 import { Link } from 'react-router'
@@ -19,9 +23,10 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { ErrorState, Skeleton } from '../components/ui/Feedback'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
-import type { ActivityItem, RecentDocument } from '../types/api'
+import type { ActivityItem, ActivityType, RecentDocument } from '../types/api'
 import { BUSY_POLL_MS, isDocumentBusy } from '../utils/documents'
 import { formatNumber, formatRelativeTime, pluralize } from '../utils/format'
+import { askAboutUrl, summaryUrl } from '../utils/links'
 
 const QUICK_ACTIONS: { to: string; title: string; description: string; icon: LucideIcon }[] = [
   {
@@ -37,6 +42,12 @@ const QUICK_ACTIONS: { to: string; title: string; description: string; icon: Luc
     icon: MessageSquareText,
   },
   {
+    to: '/papers',
+    title: 'Summarise a paper',
+    description: 'Open a paper’s Summary: nine sections, every statement cited.',
+    icon: BookOpenText,
+  },
+  {
     to: '/comparison',
     title: 'Compare papers',
     description: 'Line up objectives, methods, datasets and results.',
@@ -45,10 +56,31 @@ const QUICK_ACTIONS: { to: string; title: string; description: string; icon: Luc
   {
     to: '/insights',
     title: 'Find research gaps',
-    description: 'Surface stated limitations and open directions.',
+    description: 'Stated limitations, shared patterns and possible directions.',
     icon: Lightbulb,
   },
+  {
+    to: '/evaluation',
+    title: 'Evaluate retrieval',
+    description: 'Measure how well each search method finds the evidence.',
+    icon: FlaskConical,
+  },
 ]
+
+// Where each kind of event happened, and its icon.
+const ACTIVITY: Record<ActivityType, { icon: LucideIcon; link: (event: ActivityItem) => string | null }> = {
+  document_uploaded: { icon: FilePlus2, link: (e) => (e.document_id ? '/papers' : null) },
+  document_reindexed: { icon: RefreshCw, link: (e) => (e.document_id ? '/papers' : null) },
+  document_deleted: { icon: Trash2, link: () => null },
+  question_asked: { icon: MessageSquareText, link: () => '/assistant' },
+  summary_generated: {
+    icon: BookOpenText,
+    link: (e) => (e.document_id ? summaryUrl(e.document_id) : null),
+  },
+  comparison_run: { icon: GitCompareArrows, link: () => '/comparison' },
+  gap_analysis_run: { icon: Lightbulb, link: () => '/insights' },
+  evaluation_run: { icon: FlaskConical, link: () => '/evaluation' },
+}
 
 function ListSkeleton() {
   return (
@@ -84,9 +116,19 @@ function RecentDocuments({ documents }: { documents: RecentDocument[] }) {
             <FileText className="size-4 text-fg-muted" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-fg">
-              {document.title ?? document.filename}
-            </p>
+            {document.indexing_status === 'indexed' ? (
+              <Link
+                to={summaryUrl(document.id)}
+                className="block truncate text-sm font-medium text-fg hover:text-accent-text hover:underline"
+                title="Open the summary"
+              >
+                {document.title ?? document.filename}
+              </Link>
+            ) : (
+              <p className="truncate text-sm font-medium text-fg">
+                {document.title ?? document.filename}
+              </p>
+            )}
             <p className="truncate text-xs text-fg-subtle">
               {document.page_count !== null && `${pluralize(document.page_count, 'page')} · `}
               {formatRelativeTime(document.created_at)}
@@ -96,6 +138,16 @@ function RecentDocuments({ documents }: { documents: RecentDocument[] }) {
             processingStatus={document.processing_status}
             indexingStatus={document.indexing_status}
           />
+          {document.indexing_status === 'indexed' && (
+            <Link
+              to={askAboutUrl([document.id])}
+              className="shrink-0 rounded-md p-1.5 text-fg-subtle hover:bg-surface-muted hover:text-fg"
+              aria-label={`Ask about ${document.title ?? document.filename}`}
+              title="Ask about this paper"
+            >
+              <MessageSquareText className="size-4" aria-hidden />
+            </Link>
+          )}
         </li>
       ))}
     </ul>
@@ -113,16 +165,35 @@ function RecentActivity({ events }: { events: ActivityItem[] }) {
     )
   }
   return (
-    <ol className="space-y-4 px-5 py-4">
-      {events.map((event) => (
-        <li key={event.id} className="flex gap-3">
-          <span className="mt-1.5 size-2 shrink-0 rounded-full bg-accent" aria-hidden />
-          <div className="min-w-0">
-            <p className="text-sm text-fg">{event.description}</p>
-            <p className="text-xs text-fg-subtle">{formatRelativeTime(event.created_at)}</p>
-          </div>
-        </li>
-      ))}
+    <ol className="space-y-1 px-3 py-3">
+      {events.map((event) => {
+        const { icon: Icon, link } = ACTIVITY[event.event_type]
+        const to = link(event)
+        const body = (
+          <>
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-surface-muted text-fg-muted">
+              <Icon className="size-3.5" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm text-fg">{event.description}</span>
+              <span className="block text-xs text-fg-subtle">
+                {formatRelativeTime(event.created_at)}
+              </span>
+            </span>
+          </>
+        )
+        return (
+          <li key={event.id}>
+            {to ? (
+              <Link to={to} className="flex gap-3 rounded-lg px-2 py-2 hover:bg-surface-muted/60">
+                {body}
+              </Link>
+            ) : (
+              <div className="flex gap-3 px-2 py-2">{body}</div>
+            )}
+          </li>
+        )
+      })}
     </ol>
   )
 }
@@ -218,10 +289,10 @@ export default function Dashboard() {
         <h2 id="quick-actions" className="mb-3 text-sm font-semibold text-fg">
           Quick actions
         </h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {QUICK_ACTIONS.map(({ to, title, description, icon: Icon }) => (
             <Link
-              key={to}
+              key={title}
               to={to}
               className="group rounded-xl border border-border bg-surface p-5 shadow-card transition-colors hover:border-border-strong"
             >
