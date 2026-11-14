@@ -13,6 +13,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { GapAnalysis, GapFinding } from '../types/api'
 import { formatRelativeTime, pluralize } from '../utils/format'
+import { papersFromParams } from '../utils/links'
 
 // Used until /api/system/info has loaded; the server enforces the real limit.
 const DEFAULT_MAX_PAPERS = 5
@@ -297,7 +298,7 @@ export default function Insights() {
 
   // Papers in the URL are analysed again on load (e.g. after a reload); the
   // analysis is saved, so this makes no new model call.
-  const [initialIds] = useState(() => (searchParams.get('papers') ?? '').split(',').filter(Boolean))
+  const [initialIds] = useState(() => papersFromParams(searchParams))
   const [selected, setSelected] = useState<string[]>(initialIds)
   const [analysis, setAnalysis] = useState<GapAnalysis | null>(null)
   const [running, setRunning] = useState(initialIds.length >= 2)

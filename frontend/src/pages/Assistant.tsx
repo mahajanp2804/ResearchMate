@@ -14,6 +14,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { ChatMessage, ConversationSummary } from '../types/api'
 import { cn } from '../utils/format'
+import { papersFromParams } from '../utils/links'
 
 const EXAMPLES = [
   'What is the main objective of this research?',
@@ -80,7 +81,11 @@ export default function Assistant() {
   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null)
   const [askError, setAskError] = useState<ApiError | null>(null)
   const [draft, setDraft] = useState('')
-  const [selected, setSelected] = useState<string[] | null>(null)
+  // A link can open the assistant scoped to papers (?papers=a,b), e.g. "Ask about this paper".
+  const [selected, setSelected] = useState<string[] | null>(() => {
+    const ids = papersFromParams(searchParams)
+    return ids.length > 0 ? ids : null
+  })
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<ConversationSummary | null>(null)
   const [deleting, setDeleting] = useState(false)

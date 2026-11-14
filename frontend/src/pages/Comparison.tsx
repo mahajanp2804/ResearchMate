@@ -13,6 +13,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { ComparisonResponse } from '../types/api'
 import { pluralize } from '../utils/format'
+import { papersFromParams } from '../utils/links'
 
 // Used until /api/system/info has loaded; the server enforces the real limit.
 const DEFAULT_MAX_PAPERS = 5
@@ -35,7 +36,7 @@ export default function Comparison() {
 
   // Papers in the URL are compared again on load (e.g. after a reload). Their
   // profiles are saved, so this makes no new model calls.
-  const [initialIds] = useState(() => (searchParams.get('papers') ?? '').split(',').filter(Boolean))
+  const [initialIds] = useState(() => papersFromParams(searchParams))
   const [selected, setSelected] = useState<string[]>(initialIds)
   const [comparison, setComparison] = useState<ComparisonResponse | null>(null)
   const [running, setRunning] = useState(initialIds.length >= 2)
