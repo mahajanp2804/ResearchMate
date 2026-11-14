@@ -1,4 +1,12 @@
-import { ChevronDown, Info, KeyRound, Lightbulb, RefreshCw, TriangleAlert } from 'lucide-react'
+import {
+  ChevronDown,
+  GitCompareArrows,
+  Info,
+  KeyRound,
+  Lightbulb,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CitationDialog, type CitedPassage } from '../components/research/CitationDialog'
@@ -13,7 +21,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { GapAnalysis, GapFinding } from '../types/api'
 import { formatRelativeTime, pluralize } from '../utils/format'
-import { papersFromParams } from '../utils/links'
+import { compareUrl, papersFromParams } from '../utils/links'
 
 // Used until /api/system/info has loaded; the server enforces the real limit.
 const DEFAULT_MAX_PAPERS = 5
@@ -433,15 +441,21 @@ export default function Insights() {
               {formatRelativeTime(analysis.generated_at)} with {analysis.model} ·{' '}
               {pluralize(analysis.sources.length, 'passage')} read
             </p>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => void run(analysed, true)}
-              title="Retrieve the passages again and redo the analysis"
-            >
-              <RefreshCw className="size-3.5" aria-hidden />
-              Regenerate
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink variant="secondary" size="sm" to={compareUrl(analysed)}>
+                <GitCompareArrows className="size-3.5" aria-hidden />
+                Compare these papers
+              </ButtonLink>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void run(analysed, true)}
+                title="Retrieve the passages again and redo the analysis"
+              >
+                <RefreshCw className="size-3.5" aria-hidden />
+                Regenerate
+              </Button>
+            </div>
           </div>
           {analysis.truncated && (
             <p className="flex gap-1.5 text-xs text-warning">

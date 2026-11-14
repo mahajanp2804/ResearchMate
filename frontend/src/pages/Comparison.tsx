@@ -1,4 +1,4 @@
-import { GitCompareArrows, KeyRound, RefreshCw } from 'lucide-react'
+import { GitCompareArrows, KeyRound, Lightbulb, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { CitationDialog, type CitedPassage } from '../components/research/CitationDialog'
@@ -13,7 +13,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { ComparisonResponse } from '../types/api'
 import { pluralize } from '../utils/format'
-import { papersFromParams } from '../utils/links'
+import { insightsUrl, papersFromParams } from '../utils/links'
 
 // Used until /api/system/info has loaded; the server enforces the real limit.
 const DEFAULT_MAX_PAPERS = 5
@@ -174,15 +174,21 @@ export default function Comparison() {
                 reused > 0 ? ` · ${reused} of ${comparison.papers.length} reused from saved summaries` : ''
               }`}
               action={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => void run(compared, true)}
-                  title="Read the papers again and rebuild every column"
-                >
-                  <RefreshCw className="size-3.5" aria-hidden />
-                  Regenerate
-                </Button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <ButtonLink variant="secondary" size="sm" to={insightsUrl(compared)}>
+                    <Lightbulb className="size-3.5" aria-hidden />
+                    Find research gaps
+                  </ButtonLink>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void run(compared, true)}
+                    title="Read the papers again and rebuild every column"
+                  >
+                    <RefreshCw className="size-3.5" aria-hidden />
+                    Regenerate
+                  </Button>
+                </div>
               }
             />
             <ComparisonTable comparison={comparison} onCite={setViewing} />
