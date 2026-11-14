@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   Layers,
+  MessageSquareText,
   RefreshCw,
   Trash2,
   TriangleAlert,
@@ -14,6 +15,7 @@ import { useState } from 'react'
 import { api } from '../services/api'
 import type { DocumentSummary } from '../types/api'
 import { needsIndexing } from '../utils/documents'
+import { askAboutUrl, summaryUrl } from '../utils/links'
 import { cn, formatBytes, formatDate, pluralize } from '../utils/format'
 import { DocumentStatusBadge } from './StatusBadge'
 import { Button, ButtonLink } from './ui/Button'
@@ -25,6 +27,20 @@ const TITLE_SOURCE_LABEL = {
   first_page: 'first page heading',
   filename: 'file name',
 } as const
+
+const PROCESSING_LABEL: Record<DocumentSummary['processing_status'], string> = {
+  pending: 'Waiting',
+  processing: 'Extracting text',
+  completed: 'Text extracted',
+  failed: 'Failed',
+}
+
+const INDEXING_LABEL: Record<DocumentSummary['indexing_status'], string> = {
+  not_indexed: 'Not indexed',
+  indexing: 'Indexing',
+  indexed: 'Indexed (searchable)',
+  failed: 'Failed',
+}
 
 interface DocumentCardProps {
   document: DocumentSummary
@@ -49,7 +65,15 @@ export function DocumentCard({
   const canIndex = needsIndexing(document)
 
   const details: [string, string | undefined][] = [
+    ['Document ID', document.id],
     ['File name', document.filename],
+    ['Processing', PROCESSING_LABEL[document.processing_status]],
+    [
+      'Indexing',
+      `${INDEXING_LABEL[document.indexing_status]}${
+        document.chunk_count ? ` · ${pluralize(document.chunk_count, 'passage')}` : ''
+      }`,
+    ],
     ['Authors', metadata.author],
     ['Subject', metadata.subject],
     ['Keywords', metadata.keywords],
@@ -108,10 +132,21 @@ export function DocumentCard({
               </Button>
             )}
             {document.indexing_status === 'indexed' && (
-              <ButtonLink variant="secondary" size="sm" to={`/papers/${document.id}/summary`}>
-                <BookOpenText className="size-3.5" aria-hidden />
-                Summary
-              </ButtonLink>
+              <>
+                <ButtonLink variant="secondary" size="sm" to={summaryUrl(document.id)}>
+                  <BookOpenText className="size-3.5" aria-hidden />
+                  Summary
+                </ButtonLink>
+                <ButtonLink
+                  variant="secondary"
+                  size="sm"
+                  to={askAboutUrl([document.id])}
+                  aria-label={`Ask about ${title}`}
+                >
+                  <MessageSquareText className="size-3.5" aria-hidden />
+                  Ask
+                </ButtonLink>
+              </>
             )}
             {document.chunk_count > 0 && (
               <Button variant="secondary" size="sm" onClick={() => onViewPassages(document)}>
@@ -159,7 +194,14 @@ export function DocumentCard({
             .map(([label, value]) => (
               <div key={label} className="min-w-0">
                 <dt className="text-xs text-fg-subtle">{label}</dt>
-                <dd className="mt-0.5 text-sm break-words text-fg">{value}</dd>
+                <dd
+                  className={cn(
+                    'mt-0.5 text-sm break-words text-fg',
+                    label === 'Document ID' && 'font-mono text-xs select-all',
+                  )}
+                >
+                  {value}
+                </dd>
               </div>
             ))}
         </dl>
