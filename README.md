@@ -4,11 +4,11 @@ AI-powered research paper analysis. Upload academic papers, ask questions across
 them, compare methods and results, and surface research gaps. Every answer comes
 from your papers and cites the document, page and passage it relies on.
 
-> **Status:** under active development. Phases 1–11 (setup, PDF ingestion, chunking,
+> **Status:** under active development. Phases 1–12 (setup, PDF ingestion, chunking,
 > embeddings, the FAISS index, dense + BM25 retrieval, hybrid fusion, reranking, context
 > selection, grounded question answering with Gemini, citation validation with
 > page-level excerpts, cited paper summaries and multi-paper comparison, evidence-based
-> research gap analysis, and the RAG evaluation dashboard) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
+> research gap analysis, the RAG evaluation dashboard, and the connected React frontend) are complete. See [docs/ROADMAP.md](docs/ROADMAP.md) for the architecture and the
 > phase plan. Full documentation will be added in Phase 13.
 
 ## Planned pipeline
