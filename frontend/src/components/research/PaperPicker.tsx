@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { DocumentSummary } from '../../types/api'
 import { cn, pluralize } from '../../utils/format'
 
@@ -13,6 +14,7 @@ interface PaperPickerProps {
 
 /** Checkbox list of searchable papers; the pick order becomes the column order. */
 export function PaperPicker({ papers, selected, max, onChange, legend }: PaperPickerProps) {
+  const idPrefix = useId()
   const full = selected.length >= max
   const toggle = (id: string) =>
     onChange(selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id])
@@ -40,11 +42,19 @@ export function PaperPicker({ papers, selected, max, onChange, legend }: PaperPi
                   checked={checked}
                   disabled={disabled}
                   onChange={() => toggle(paper.id)}
+                  // Named by the title alone; authors and pages are its description.
+                  aria-labelledby={`${idPrefix}-${paper.id}-title`}
+                  aria-describedby={`${idPrefix}-${paper.id}-meta`}
                   className="mt-0.5 size-4 shrink-0 accent-accent"
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-fg">{paper.title ?? paper.filename}</span>
-                  <span className="block truncate text-xs text-fg-subtle">
+                  <span id={`${idPrefix}-${paper.id}-title`} className="block text-sm text-fg">
+                    {paper.title ?? paper.filename}
+                  </span>
+                  <span
+                    id={`${idPrefix}-${paper.id}-meta`}
+                    className="block truncate text-xs text-fg-subtle"
+                  >
                     {[
                       paper.extracted_metadata.author,
                       paper.page_count !== null && pluralize(paper.page_count, 'page'),
