@@ -284,6 +284,12 @@ What this shows, and what it doesn't:
 
 ### Phase 12 — Frontend integration
 - Papers (upload with progress, status polling, delete, reindex), Assistant (scoped chat, citations, source viewer), Comparison table, Insights, Evaluation charts (Recharts), Settings.
+- **Status: done.** Each screen was built with its phase; this phase connected them and checked the whole app against the specification:
+  - Features hand papers to each other through a `?papers=` link: *Ask* on a paper card, its summary and the dashboard opens the assistant scoped to that paper, and a comparison and a gap analysis of the same papers link to each other.
+  - The dashboard's recent papers open their summaries, every activity links to where it happened, and the quick actions cover every feature.
+  - Paper details show the document ID and the processing and indexing statuses separately, as the specification lists them.
+  - A page that fails to render shows a recoverable error inside the layout instead of a blank app; a skip link and named checkboxes help keyboard and screen-reader users; the evaluation page (and its charting library) loads only when visited, keeping the main bundle at about 425 kB.
+  - Every page was checked at 375 px for content running off-screen (one real bug fixed: dashboard cards were pushed off-screen by long titles), in light and dark mode, and with the keyboard.
 
 ### Phase 13 — Testing, Docker & documentation
 - Coverage pass, Dockerfiles + docker-compose (persistent volume for data and model cache), full README with architecture, RAG workflow, evaluation method, API reference and "How to Explain This Project in an Interview".
