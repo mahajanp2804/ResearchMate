@@ -1,4 +1,12 @@
-import { ArrowLeft, BookOpenText, ExternalLink, KeyRound, RefreshCw, TriangleAlert } from 'lucide-react'
+import {
+  ArrowLeft,
+  BookOpenText,
+  ExternalLink,
+  KeyRound,
+  MessageSquareText,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react'
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { AspectContent } from '../components/research/AspectContent'
@@ -11,6 +19,7 @@ import { useApi } from '../hooks/useApi'
 import { ApiError, api } from '../services/api'
 import type { PaperProfile } from '../types/api'
 import { formatRelativeTime, pluralize } from '../utils/format'
+import { askAboutUrl } from '../utils/links'
 
 const NOT_FOUND_TEXT = 'Not found in the passages retrieved from this paper.'
 
@@ -166,6 +175,12 @@ function SummaryView({ documentId }: { documentId: string }) {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
+            {searchable && (
+              <ButtonLink variant="secondary" size="sm" to={askAboutUrl([documentId])}>
+                <MessageSquareText className="size-3.5" aria-hidden />
+                Ask about this paper
+              </ButtonLink>
+            )}
             <a
               href={api.documentFileUrl(documentId)}
               target="_blank"
