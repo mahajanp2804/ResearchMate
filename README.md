@@ -361,17 +361,18 @@ cd backend && .venv/bin/python -m scripts.run_evaluation            # retrieval 
 cd backend && .venv/bin/python -m scripts.run_evaluation --answers  # also judge answers
 ```
 
-**Measured results** (31 answerable questions; Apple Silicon laptop CPU; 250-token chunks):
+**Measured results** (31 answerable questions; Apple Silicon laptop CPU; 250-token chunks;
+latency excludes loading the models):
 
 | Method | P@1 | R@3 | R@10 | MRR | ms / query |
 |---|---|---|---|---|---|
-| Dense | 0.452 | 0.677 | 0.903 | 0.617 | 9 |
-| BM25 | 0.581 | 0.774 | 0.919 | 0.713 | 1 |
-| Hybrid (RRF) | 0.548 | 0.742 | **0.968** | 0.699 | 9 |
-| Hybrid + rerank | **0.677** | **0.806** | 0.952 | **0.786** | 269 |
+| Dense | 0.452 | 0.677 | 0.903 | 0.617 | 7 |
+| BM25 | 0.581 | 0.774 | 0.919 | 0.713 | 0.5 |
+| Hybrid (RRF) | 0.548 | 0.742 | **0.968** | 0.699 | 7 |
+| Hybrid + rerank | **0.677** | **0.806** | 0.952 | **0.786** | 159 |
 
 Reranking ranks best overall and helps most on paraphrased (+0.18 MRR over hybrid) and
-two-paper questions, at about 270 ms per query on a CPU. Fusion finds the most evidence
+two-paper questions, at about 160 ms per query on a CPU. Fusion finds the most evidence
 within ten passages. BM25 beats dense even on paraphrases here, which says more about five
 short papers with distinctive vocabulary than about dense retrieval in general. The
 collection is small (top-10 covers almost a third of it), so R@10 is inflated and
@@ -411,7 +412,7 @@ evaluation, fusion found the most evidence within ten passages (R@10 0.968).
 each passage separately, which is fast but coarse. A cross-encoder reads the question and
 a passage *together* and scores how well the passage answers it, which is far more
 accurate but too slow to run over everything. So it reorders only the top 20 fused
-candidates. Measured here: MRR 0.699 → 0.786, P@1 0.548 → 0.677, at ~270 ms per query on
+candidates. Measured here: MRR 0.699 → 0.786, P@1 0.548 → 0.677, at ~160 ms per query on
 CPU.
 
 **How citations are generated.** The model never writes page numbers or file names. The

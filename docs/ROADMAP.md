@@ -49,7 +49,7 @@ acceptance criteria each phase must meet before the next one starts.
 | Document filtering | Applied **inside** each retriever (FAISS `IDSelector`, BM25 score mask) | Out-of-scope chunks can never reach fusion, reranking or the LLM prompt. |
 | Fusion | Reciprocal Rank Fusion, `k = 60` | Rank-based, so dense cosine scores and BM25 scores never need to be put on the same scale. |
 | Grounding gate *(revised in Phase 6)* | Refuse **without calling the LLM** whenever retrieval yields no context. A reranker-score threshold (`MIN_RERANK_SCORE`) exists but is **off by default**; otherwise the strict grounding prompt (Phase 7) and citation validation (Phase 8) decide | Measured with `ms-marco-MiniLM-L-6-v2`: answerable paraphrased research questions scored as low as −11.1 and unanswerable ones as high as −9.9, so no threshold separates them, although the right passage ranked 1st in 9/12 and 2nd in 3/12. Phase 11 measures refusal accuracy and can re-enable the gate with a better-calibrated reranker. |
-| Reranking value | Reranking is on (spec requirement); Phase 11 measured its benefit | On the sample collection it gives the best ranking (MRR 0.786 vs 0.699 for hybrid without it), mostly on paraphrased and two-paper questions, at about 270 ms per query on a laptop CPU. See *Phase 11 results* below. |
+| Reranking value | Reranking is on (spec requirement); Phase 11 measured its benefit | On the sample collection it gives the best ranking (MRR 0.786 vs 0.699 for hybrid without it), mostly on paraphrased and two-paper questions, at about 160 ms per query on a laptop CPU. See *Phase 11 results* below. |
 | Context de-duplication | Drop a passage whose words overlap a kept one by Jaccard ≥ 0.8 or are ≥ 90% contained in it | Repeated sections and near-identical uploads waste context slots; neighbouring chunks share only their ~20% overlap. |
 | Citations | Sources numbered `[S1]…[Sn]` in the prompt; markers in the answer are parsed and validated against the sources actually sent, and markers for sources that weren't sent are removed before saving | The LLM never writes page numbers or file names itself, so it cannot invent them. |
 | Citation excerpts *(Phase 8)* | Code, not the model, picks the excerpt: the sentence of the cited passage that shares the most terms with the statements citing it, located on its exact page when a passage spans two pages | A model-written quote can be paraphrased or invented; a sentence copied from the stored passage cannot. The support score is lexical overlap, not entailment; Phase 11 measures faithfulness properly. |
@@ -263,19 +263,19 @@ commands to verify it. A phase is not "done" until its tests pass.
 
 #### Phase 11 results (retrieval, measured)
 
-Sample collection: 5 papers, 35 chunks; 31 answerable questions. Measured 13 Nov 2026 on an Apple Silicon laptop (CPU) with `all-MiniLM-L6-v2`, `ms-marco-MiniLM-L-6-v2`, 250-token chunks with 50 overlap and RRF k = 60. Two runs in the app gave identical numbers.
+Sample collection: 5 papers, 35 chunks; 31 answerable questions. Measured 13 Nov 2026 on an Apple Silicon laptop (CPU) with `all-MiniLM-L6-v2`, `ms-marco-MiniLM-L-6-v2`, 250-token chunks with 50 overlap and RRF k = 60. Two runs in the app gave identical numbers, and the Docker image (Linux, ARM64) reproduced every quality metric exactly. Latency is measured after one untimed warm-up search per method, so it excludes loading or downloading the models (an earlier run that counted the first load reported 269 ms for reranking).
 
 | Method | P@1 | P@5 | R@1 | R@3 | R@5 | R@10 | MRR | ms / query |
 |---|---|---|---|---|---|---|---|---|
-| Dense | 0.452 | 0.194 | 0.452 | 0.677 | 0.823 | 0.903 | 0.617 | 9.1 |
-| BM25 | 0.581 | 0.206 | 0.548 | 0.774 | 0.871 | 0.919 | 0.713 | 0.8 |
-| Hybrid (RRF) | 0.548 | 0.200 | 0.532 | 0.742 | 0.871 | **0.968** | 0.699 | 9.1 |
-| Hybrid + rerank | **0.677** | **0.213** | **0.629** | **0.806** | **0.903** | 0.952 | **0.786** | 268.7 |
+| Dense | 0.452 | 0.194 | 0.452 | 0.677 | 0.823 | 0.903 | 0.617 | 6.7 |
+| BM25 | 0.581 | 0.206 | 0.548 | 0.774 | 0.871 | 0.919 | 0.713 | 0.5 |
+| Hybrid (RRF) | 0.548 | 0.200 | 0.532 | 0.742 | 0.871 | **0.968** | 0.699 | 7.0 |
+| Hybrid + rerank | **0.677** | **0.213** | **0.629** | **0.806** | **0.903** | 0.952 | **0.786** | 158.8 |
 
 MRR by question type (number of questions in brackets): factual (12) 0.688 / 0.762 / 0.786 / 0.777; exact term (6) 0.875 / 1.000 / 1.000 / 1.000; two papers (3) 0.344 / 0.556 / 0.400 / 0.733; paraphrase (10) 0.458 / 0.528 / 0.503 / 0.683 (dense / BM25 / hybrid / hybrid + rerank).
 
 What this shows, and what it doesn't:
-- Reranking gives the best ranking overall and helps most where wording differs (paraphrases +0.18 MRR over hybrid) and on two-paper questions, at ~270 ms per query on CPU.
+- Reranking gives the best ranking overall and helps most where wording differs (paraphrases +0.18 MRR over hybrid) and on two-paper questions, at ~160 ms per query on CPU.
 - Fusion finds the most evidence within 10 passages (R@10 0.968), but its MRR is slightly below BM25 here: a weaker dense ranking can push BM25's top hit down.
 - BM25 beats dense even on the paraphrase questions. Five short papers with distinctive vocabulary favour lexical matching; this is not evidence that dense retrieval is weak in general.
 - The collection is tiny (35 chunks, so top-10 covers almost a third of it): R@10 is inflated, and with 3-12 questions per category, differences of a few hundredths are noise. MRR, P@1 and R@1-3 are the informative columns.
