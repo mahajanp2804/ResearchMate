@@ -453,7 +453,7 @@ used to train the ProxAvg models?"* (not in the papers, so it should be refused)
 
 ```bash
 cd backend
-.venv/bin/pytest                      # 506 tests
+.venv/bin/pytest                      # 507 tests
 .venv/bin/pytest --cov                # with coverage (97% of statements and branches)
 .venv/bin/pytest -m "not models"      # offline: skip tests that download models
 .venv/bin/pytest -m llm               # live Gemini tests (need GEMINI_API_KEY)
