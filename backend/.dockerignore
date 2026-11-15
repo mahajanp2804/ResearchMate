@@ -1,0 +1,12 @@
+# Only the app, the evaluation data and the scripts go into the image.
+.venv
+data
+tests
+**/__pycache__
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+# Secrets are passed at runtime (docker compose reads backend/.env), never baked in.
+.env
+.env.*
