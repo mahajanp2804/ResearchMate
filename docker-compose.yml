@@ -1,0 +1,30 @@
+# ResearchMate in two containers:
+#   docker compose up --build      then open http://localhost:8080
+# Put GEMINI_API_KEY in backend/.env first if you want answers, summaries,
+# comparisons and gap analyses; uploads, search and retrieval evaluation work
+# without it.
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    volumes:
+      # Uploaded PDFs, the SQLite database and the FAISS index.
+      - researchmate-data:/app/data
+      # Embedding and reranking models, downloaded once on first use.
+      - model-cache:/models
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  researchmate-data:
+  model-cache:
