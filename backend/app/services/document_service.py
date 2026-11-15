@@ -119,18 +119,18 @@ def _store(db: Session, settings: Settings, filename: str, stream: BinaryIO) -> 
             ],
         )
         db.add(document)
-        # Flush first: ActivityEvent has no ORM relationship to Document, so
-        # SQLAlchemy would not otherwise insert the document row before it.
-        db.flush()
-        record_activity(
-            db, ActivityType.DOCUMENT_UPLOADED, f"Uploaded “{extracted.title}”", document_id
-        )
-
-        temp_path.replace(final_path)
         try:
+            # Flush first: ActivityEvent has no ORM relationship to Document, so
+            # SQLAlchemy would not otherwise insert the document row before it.
+            # If another request stored the same file since our check above,
+            # the unique file hash makes this flush (or the commit) fail.
+            db.flush()
+            record_activity(
+                db, ActivityType.DOCUMENT_UPLOADED, f"Uploaded “{extracted.title}”", document_id
+            )
+            temp_path.replace(final_path)
             db.commit()
         except IntegrityError:
-            # Another request stored the same file between our check and commit.
             db.rollback()
             final_path.unlink(missing_ok=True)
             existing = _find_by_hash(db, stored.sha256)
