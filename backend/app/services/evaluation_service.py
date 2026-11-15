@@ -343,6 +343,12 @@ class EvaluationService:
         latencies: dict[str, list[float]] = {method: [] for method in methods}
         results: list[dict[str, Any]] = []
 
+        # One untimed search per method first, so loading (or downloading) the
+        # embedding model and cross-encoder doesn't count as query latency.
+        if questions:
+            for method in methods:
+                searches[method](db, questions[0].question, RETRIEVE_TOP_K, scope)
+
         for index, question in enumerate(questions):
             entry: dict[str, Any] = {
                 "key": question.key,

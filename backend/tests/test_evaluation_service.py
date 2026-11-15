@@ -111,6 +111,14 @@ def test_per_question_results_show_where_the_evidence_ranked(library: FastAPI) -
     assert first is None or top[first - 1]["relevant"]
 
 
+def test_model_loading_is_not_timed_as_query_latency(library: FastAPI) -> None:
+    reranker = library.state.test_reranker
+    reranker.calls.clear()
+    run_evaluation(library, methods=["hybrid_rerank"])
+    # One warm-up search, then one per answerable question.
+    assert len(reranker.calls) == 1 + len(ANSWERABLE)
+
+
 def test_runs_are_logged_and_not_started_twice(library: FastAPI) -> None:
     service = library.state.evaluation
     with library.state.database.session() as db:
