@@ -263,7 +263,7 @@ commands to verify it. A phase is not "done" until its tests pass.
 
 #### Phase 11 results (retrieval, measured)
 
-Sample collection: 5 papers, 35 chunks; 31 answerable questions. Measured 13 Nov 2026 on an Apple Silicon laptop (CPU) with `all-MiniLM-L6-v2`, `ms-marco-MiniLM-L-6-v2`, 250-token chunks with 50 overlap and RRF k = 60. Two runs in the app gave identical numbers, and the Docker image (Linux, ARM64) reproduced every quality metric exactly. Latency is measured after one untimed warm-up search per method, so it excludes loading or downloading the models (an earlier run that counted the first load reported 269 ms for reranking).
+Sample collection: 5 papers, 35 chunks; 31 answerable questions. Measured 13 Nov 2026 on an Apple Silicon laptop (CPU) with `all-MiniLM-L6-v2`, `ms-marco-MiniLM-L-6-v2`, 250-token chunks with 50 overlap and RRF k = 60. Two runs in the app gave identical numbers, and the Docker image (Linux, ARM64) reproduced every quality metric exactly. Latency is measured after one untimed warm-up search per method, so it excludes loading or downloading the models (an earlier run that counted the first load reported 269 ms for reranking). Inside Docker on the same laptop, reranking took about 297 ms per query (the Docker VM is slower than native).
 
 | Method | P@1 | P@5 | R@1 | R@3 | R@5 | R@10 | MRR | ms / query |
 |---|---|---|---|---|---|---|---|---|

@@ -100,7 +100,7 @@ All screenshots show the app running on the bundled synthetic sample papers.
 | ![Dashboard](docs/screenshots/dashboard.png) | ![Paper library](docs/screenshots/papers.png) |
 | **Dashboard**: totals, recent papers and activity, quick actions | **Paper library**: status, metadata and actions per paper |
 | ![Evaluation](docs/screenshots/evaluation.png) | ![Evaluation in light mode](docs/screenshots/evaluation-light.png) |
-| **RAG Evaluation**: retrieval metrics per method, measured | **Light theme** |
+| **RAG Evaluation**: retrieval metrics per method, measured in the Docker stack (hence the slower reranking) | **Light theme** |
 
 Screens that show generated text (answers, summaries, comparisons, insights) are not
 included yet: they were developed and tested against a scripted stand-in model, and
